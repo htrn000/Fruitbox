@@ -1,0 +1,176 @@
+:root {
+  color-scheme: light dark;
+  --bg: #0f1a14;
+  --panel: #1a2e22;
+  --text: #e8f5e9;
+  --muted: #a5d6a7;
+  --accent: #66bb6a;
+  --wall: #37474f;
+  --floor: #1b4332;
+  --goal: #ffd54f;
+  --box: #ef6c57;
+  --player: #42a5f5;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: linear-gradient(160deg, #0b1410, #14261c 45%, #0f1a14);
+  color: var(--text);
+}
+
+.app-header {
+  text-align: center;
+  padding: 1rem 1rem 0.25rem;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.6rem;
+  letter-spacing: 0.04em;
+}
+
+.tagline {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.app-main {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem calc(1rem + var(--safe-bottom));
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+.panel {
+  background: color-mix(in srgb, var(--panel) 92%, black);
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+  border-radius: 14px;
+  padding: 0.85rem 1rem;
+}
+
+.controls label {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 0.65rem;
+}
+
+select,
+button {
+  font: inherit;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  background: #102018;
+  color: var(--text);
+  padding: 0.55rem 0.75rem;
+}
+
+select {
+  width: 100%;
+  margin-top: 0.25rem;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+}
+
+button {
+  flex: 1 1 auto;
+  cursor: pointer;
+  background: linear-gradient(180deg, #1f4d33, #163a27);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.status {
+  margin: 0.35rem 0 0;
+  min-height: 1.25rem;
+  font-size: 0.9rem;
+}
+
+.solver-stats {
+  margin: 0.25rem 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.board-wrap {
+  display: flex;
+  justify-content: center;
+  touch-action: none;
+  user-select: none;
+}
+
+.board {
+  display: grid;
+  gap: 2px;
+  width: min(92vw, 360px);
+  aspect-ratio: 1;
+}
+
+.cell {
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  font-size: clamp(1rem, 5vw, 1.5rem);
+  line-height: 1;
+}
+
+.cell.wall {
+  background: var(--wall);
+}
+
+.cell.floor {
+  background: var(--floor);
+}
+
+.cell.goal {
+  background: color-mix(in srgb, var(--floor) 70%, #3e2723);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--goal) 55%, transparent);
+}
+
+.goal-dot {
+  color: var(--goal);
+}
+
+.help {
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.help p {
+  margin: 0;
+}
+
+@media (min-width: 700px) {
+  .app-main {
+    max-width: 720px;
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+
+  .board-wrap {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+}

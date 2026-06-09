@@ -1,0 +1,13 @@
+{
+  "id": "tutorial",
+  "name": "Tutorial",
+  "width": 4,
+  "height": 5,
+  "tiles": [
+    "####",
+    "# @#",
+    "# $#",
+    "# .#",
+    "####"
+  ]
+}

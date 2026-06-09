@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#1a472a" />
+    <meta name="description" content="Fruitbox — push boxes onto goals" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍎</text></svg>" />
+    <link rel="stylesheet" href="/style.css" />
+    <title>Fruitbox</title>
+  </head>
+  <body>
+    <header class="app-header">
+      <h1>Fruitbox</h1>
+      <p class="tagline">Push fruits to the goals</p>
+    </header>
+
+    <main class="app-main">
+      <section class="controls panel">
+        <label>
+          Level
+          <select id="level-select" aria-label="Select level"></select>
+        </label>
+        <label>
+          Solver
+          <select id="solver-select" aria-label="Select solver"></select>
+        </label>
+        <div class="button-row">
+          <button type="button" id="btn-reset">Reset</button>
+          <button type="button" id="btn-solve">Solve</button>
+          <button type="button" id="btn-replay" disabled>Replay</button>
+        </div>
+        <p id="status" class="status" role="status">Loading…</p>
+        <p id="solver-stats" class="solver-stats" hidden></p>
+      </section>
+
+      <section class="board-wrap panel" aria-label="Game board">
+        <div id="board" class="board"></div>
+      </section>
+
+      <section class="help panel">
+        <p>Swipe or use arrow keys / WASD. Boxes push onto <span class="goal-dot">goals</span>.</p>
+      </section>
+    </main>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

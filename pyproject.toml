@@ -13,9 +13,21 @@ dependencies = [
 [project.scripts]
 fruitbox = "fruitbox.cli:app"
 
+[dependency-groups]
+dev = [
+    "pytest>=7.4.0",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build]
 packages = ["fruitbox"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["fruitbox"]
+
+[tool.hatch.build.force-include]
+"fruitbox/data" = "fruitbox/data"
+"fruitbox/static" = "fruitbox/static"
