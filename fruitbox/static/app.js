@@ -1,22 +1,4 @@
-/** Fruitbox PWA client — offline-capable play with online solvers. */
-
-const DIRS = {
-  up: [0, -1],
-  down: [0, 1],
-  left: [-1, 0],
-  right: [1, 0],
-};
-
-const KEY_MAP = {
-  ArrowUp: "up",
-  ArrowDown: "down",
-  ArrowLeft: "left",
-  ArrowRight: "right",
-  w: "up",
-  s: "down",
-  a: "left",
-  d: "right",
-};
+/** Fruitbox PWA — 10-sum rectangle puzzle with offline play. */
 
 const levelSelect = document.getElementById("level-select");
 const solverSelect = document.getElementById("solver-select");
@@ -24,107 +6,206 @@ const btnReset = document.getElementById("btn-reset");
 const btnSolve = document.getElementById("btn-solve");
 const btnReplay = document.getElementById("btn-replay");
 const statusEl = document.getElementById("status");
+const selectionInfoEl = document.getElementById("selection-info");
 const solverStatsEl = document.getElementById("solver-stats");
 const boardEl = document.getElementById("board");
 
 let currentLevelId = null;
 let state = null;
 let replayMoves = [];
-let replayIndex = 0;
-let touchStart = null;
+let pairSelection = null;
+let dragStart = null;
+let dragEnd = null;
+let isDragging = false;
 
 function setStatus(msg) {
   statusEl.textContent = msg;
 }
 
-function posKey([x, y]) {
-  return `${x},${y}`;
+function setSelectionInfo(msg, show = true) {
+  selectionInfoEl.hidden = !show;
+  selectionInfoEl.textContent = msg;
 }
 
-function setFromLists(walls, goals, boxes, player) {
+function normalizeRect(r0, c0, r1, c1) {
   return {
-    walls: new Set(walls.map((p) => posKey(p))),
-    goals: new Set(goals.map((p) => posKey(p))),
-    boxes: new Set(boxes.map((p) => posKey(p))),
-    player: [...player],
-    width: state?.width ?? 0,
-    height: state?.height ?? 0,
-    level_id: state?.level_id ?? currentLevelId,
+    r0: Math.min(r0, r1),
+    c0: Math.min(c0, c1),
+    r1: Math.max(r0, r1),
+    c1: Math.max(c0, c1),
   };
 }
 
-function isWalkable(s, x, y, ignoreBoxes = false) {
-  if (x < 0 || y < 0 || x >= s.width || y >= s.height) return false;
-  const key = posKey([x, y]);
-  if (s.walls.has(key)) return false;
-  if (!ignoreBoxes && s.boxes.has(key)) return false;
-  return true;
+function inRect(row, col, rect) {
+  return row >= rect.r0 && row <= rect.r1 && col >= rect.c0 && col <= rect.c1;
 }
 
-function applyMoveLocal(s, direction) {
-  const [dx, dy] = DIRS[direction];
-  const [px, py] = s.player;
-  const nx = px + dx;
-  const ny = py + dy;
-  const next = posKey([nx, ny]);
-  if (!isWalkable(s, nx, ny)) return null;
+function rectCells(rect) {
+  const cells = [];
+  for (let r = rect.r0; r <= rect.r1; r += 1) {
+    for (let c = rect.c0; c <= rect.c1; c += 1) {
+      cells.push([r, c]);
+    }
+  }
+  return cells;
+}
 
-  const boxes = new Set(s.boxes);
-  if (boxes.has(next)) {
-    const bx = nx + dx;
-    const by = ny + dy;
-    if (!isWalkable(s, bx, by)) return null;
-    boxes.delete(next);
-    boxes.add(posKey([bx, by]));
+function isAdjacent(r0, c0, r1, c1) {
+  return (r0 === r1 && Math.abs(c0 - c1) === 1) || (c0 === c1 && Math.abs(r0 - r1) === 1);
+}
+
+function rectSum(grid, rect) {
+  let total = 0;
+  for (const [r, c] of rectCells(rect)) {
+    total += grid[r][c];
+  }
+  return total;
+}
+
+function isValidRect(grid, rect) {
+  const cells = rectCells(rect);
+  if (cells.length < 2) return false;
+  if (cells.some(([r, c]) => grid[r][c] === 0)) return false;
+  return rectSum(grid, rect) === 10;
+}
+
+function isValidPair(grid, r0, c0, r1, c1) {
+  if (!isAdjacent(r0, c0, r1, c1)) return false;
+  const v0 = grid[r0][c0];
+  const v1 = grid[r1][c1];
+  if (v0 === 0 || v1 === 0) return false;
+  return v0 + v1 === 10;
+}
+
+function applyMoveLocal(grid, move) {
+  const next = grid.map((row) => [...row]);
+  if (move.kind === "rectangle") {
+    const rect = normalizeRect(move.r0, move.c0, move.r1, move.c1);
+    if (!isValidRect(next, rect)) return null;
+    for (const [r, c] of rectCells(rect)) {
+      next[r][c] = 0;
+    }
+    return next;
+  }
+  if (!isValidPair(next, move.r0, move.c0, move.r1, move.c1)) return null;
+  next[move.r0][move.c0] = 0;
+  next[move.r1][move.c1] = 0;
+  return next;
+}
+
+function remainingCells(grid) {
+  return grid.flat().filter((v) => v !== 0).length;
+}
+
+function enumerateMovesLocal(grid) {
+  const moves = [];
+  const h = grid.length;
+  const w = grid[0]?.length ?? 0;
+
+  for (let r0 = 0; r0 < h; r0 += 1) {
+    for (let c0 = 0; c0 < w; c0 += 1) {
+      if (grid[r0][c0] === 0) continue;
+      for (let r1 = r0; r1 < h; r1 += 1) {
+        const cStart = r1 === r0 ? c0 : 0;
+        for (let c1 = cStart; c1 < w; c1 += 1) {
+          const rect = normalizeRect(r0, c0, r1, c1);
+          if (isValidRect(grid, rect)) {
+            moves.push({ kind: "rectangle", ...rect });
+          }
+        }
+      }
+    }
   }
 
+  for (let r0 = 0; r0 < h; r0 += 1) {
+    for (let c0 = 0; c0 < w; c0 += 1) {
+      if (grid[r0][c0] === 0) continue;
+      for (const [dr, dc] of [[0, 1], [1, 0]]) {
+        const r1 = r0 + dr;
+        const c1 = c0 + dc;
+        if (r1 >= h || c1 >= w) continue;
+        if (isValidPair(grid, r0, c0, r1, c1)) {
+          moves.push({ kind: "pair", r0, c0, r1, c1 });
+        }
+      }
+    }
+  }
+  return moves;
+}
+
+function isWonLocal(grid) {
+  if (remainingCells(grid) === 0) return true;
+  return enumerateMovesLocal(grid).length === 0;
+}
+
+function cellFromEvent(ev) {
+  const target = ev.target.closest(".cell");
+  if (!target) return null;
   return {
-    ...s,
-    player: [nx, ny],
-    boxes,
+    row: Number(target.dataset.row),
+    col: Number(target.dataset.col),
   };
-}
-
-function isWon(s) {
-  for (const g of s.goals) {
-    if (!s.boxes.has(g)) return false;
-  }
-  return s.goals.size > 0;
 }
 
 function renderBoard() {
   if (!state) return;
-  boardEl.style.gridTemplateColumns = `repeat(${state.width}, 1fr)`;
-  boardEl.style.gridTemplateRows = `repeat(${state.height}, 1fr)`;
+  const { grid, width, height } = state;
+  boardEl.style.gridTemplateColumns = `repeat(${width}, 1fr)`;
   boardEl.innerHTML = "";
 
-  for (let y = 0; y < state.height; y += 1) {
-    for (let x = 0; x < state.width; x += 1) {
-      const key = posKey([x, y]);
+  let activeRect = null;
+  if (dragStart && dragEnd) {
+    activeRect = normalizeRect(dragStart.row, dragStart.col, dragEnd.row, dragEnd.col);
+  }
+
+  for (let row = 0; row < height; row += 1) {
+    for (let col = 0; col < width; col += 1) {
+      const value = grid[row][col];
       const cell = document.createElement("div");
       cell.className = "cell";
-      const isGoal = state.goals.has(key);
-      const isBox = state.boxes.has(key);
-      const isPlayer = state.player[0] === x && state.player[1] === y;
+      cell.dataset.row = String(row);
+      cell.dataset.col = String(col);
 
-      if (state.walls.has(key)) {
-        cell.classList.add("wall");
+      if (value === 0) {
+        cell.classList.add("empty");
         cell.textContent = "";
-      } else if (isGoal) {
-        cell.classList.add("goal");
       } else {
-        cell.classList.add("floor");
+        cell.textContent = String(value);
       }
 
-      if (isBox) cell.textContent = "🍎";
-      if (isPlayer) cell.textContent = isBox ? "🧑‍🌾" : "🧑";
-      if (isGoal && !isBox && !isPlayer) cell.textContent = "○";
+      if (pairSelection && pairSelection.row === row && pairSelection.col === col) {
+        cell.classList.add("selected");
+      }
+
+      if (activeRect && inRect(row, col, activeRect)) {
+        cell.classList.add("in-rect");
+        const sum = rectSum(grid, activeRect);
+        const hasEmpty = rectCells(activeRect).some(([r, c]) => grid[r][c] === 0);
+        if (!hasEmpty && rectCells(activeRect).length >= 2) {
+          cell.classList.add(sum === 10 ? "valid" : "invalid");
+        }
+      }
 
       boardEl.appendChild(cell);
     }
   }
 
-  if (isWon(state)) {
+  if (activeRect) {
+    const sum = rectSum(grid, activeRect);
+    const count = rectCells(activeRect).length;
+    const hasEmpty = rectCells(activeRect).some(([r, c]) => grid[r][c] === 0);
+    if (count >= 2 && !hasEmpty) {
+      setSelectionInfo(`Sum: ${sum}${sum === 10 ? " ✓" : ""}`);
+    } else {
+      setSelectionInfo(`Select 2+ filled cells (sum: ${sum})`);
+    }
+  } else if (pairSelection) {
+    setSelectionInfo(`Pair: tap adjacent cell (${grid[pairSelection.row][pairSelection.col]} + ?)`);
+  } else {
+    setSelectionInfo("", false);
+  }
+
+  if (state.won) {
     setStatus("You win! 🎉");
   }
 }
@@ -161,7 +242,9 @@ async function loadMeta() {
 async function resetSession() {
   currentLevelId = levelSelect.value;
   replayMoves = [];
-  replayIndex = 0;
+  pairSelection = null;
+  dragStart = null;
+  dragEnd = null;
   btnReplay.disabled = true;
   solverStatsEl.hidden = true;
 
@@ -170,31 +253,108 @@ async function resetSession() {
     level_id: data.level_id,
     width: data.width,
     height: data.height,
-    walls: new Set(data.walls.map((p) => posKey(p))),
-    goals: new Set(data.goals.map((p) => posKey(p))),
-    boxes: new Set(data.boxes.map((p) => posKey(p))),
-    player: data.player,
+    grid: data.grid,
+    won: data.won,
   };
-  setStatus("Ready — move with arrows or swipe");
+  setStatus("Drag a rectangle or tap pairs that sum to 10");
   renderBoard();
 }
 
-async function tryMove(direction) {
-  if (!state || isWon(state)) return;
+async function animateClear(cells) {
+  for (const cell of boardEl.querySelectorAll(".cell")) {
+    const row = Number(cell.dataset.row);
+    const col = Number(cell.dataset.col);
+    if (cells.some(([r, c]) => r === row && c === col)) {
+      cell.classList.add("clearing");
+    }
+  }
+  await new Promise((r) => setTimeout(r, 320));
+}
+
+async function tryMove(move) {
+  if (!state || state.won) return false;
+
+  let cells;
+  if (move.kind === "rectangle") {
+    const rect = normalizeRect(move.r0, move.c0, move.r1, move.c1);
+    cells = rectCells(rect);
+  } else {
+    cells = [[move.r0, move.c0], [move.r1, move.c1]];
+  }
+
   try {
     const data = await api(`/api/sessions/${currentLevelId}/move`, {
       method: "POST",
-      body: JSON.stringify({ direction }),
+      body: JSON.stringify(move),
     });
-    state = setFromLists(data.walls, data.goals, data.boxes, data.player);
+    await animateClear(cells);
+    state = {
+      level_id: data.level_id,
+      width: data.width,
+      height: data.height,
+      grid: data.grid,
+      won: data.won,
+    };
+    pairSelection = null;
     renderBoard();
+    return true;
   } catch {
-    const local = applyMoveLocal(state, direction);
-    if (local) {
-      state = local;
-      renderBoard();
-    }
+    const next = applyMoveLocal(state.grid, move);
+    if (!next) return false;
+    await animateClear(cells);
+    state = {
+      ...state,
+      grid: next,
+      won: isWonLocal(next),
+    };
+    pairSelection = null;
+    renderBoard();
+    return true;
   }
+}
+
+async function finishRectDrag() {
+  if (!dragStart || !dragEnd) return;
+  const rect = normalizeRect(dragStart.row, dragStart.col, dragEnd.row, dragEnd.col);
+  dragStart = null;
+  dragEnd = null;
+  isDragging = false;
+
+  if (isValidRect(state.grid, rect)) {
+    await tryMove({ kind: "rectangle", ...rect });
+  } else {
+    renderBoard();
+  }
+}
+
+async function handlePairTap(row, col) {
+  if (state.grid[row][col] === 0) {
+    pairSelection = null;
+    renderBoard();
+    return;
+  }
+
+  if (!pairSelection) {
+    pairSelection = { row, col };
+    renderBoard();
+    return;
+  }
+
+  if (pairSelection.row === row && pairSelection.col === col) {
+    pairSelection = null;
+    renderBoard();
+    return;
+  }
+
+  const move = {
+    kind: "pair",
+    r0: pairSelection.row,
+    c0: pairSelection.col,
+    r1: row,
+    c1: col,
+  };
+  pairSelection = null;
+  await tryMove(move);
 }
 
 async function solveLevel() {
@@ -213,7 +373,6 @@ async function solveLevel() {
       return;
     }
     replayMoves = result.moves;
-    replayIndex = 0;
     btnReplay.disabled = replayMoves.length === 0;
     solverStatsEl.hidden = false;
     solverStatsEl.textContent = `${result.solver}: ${result.moves.length} moves, ${result.nodes_expanded} nodes expanded`;
@@ -225,20 +384,11 @@ async function solveLevel() {
   }
 }
 
-async function replayStep() {
-  if (replayIndex >= replayMoves.length) {
-    setStatus("Replay complete");
-    return;
-  }
-  await tryMove(replayMoves[replayIndex]);
-  replayIndex += 1;
-}
-
 async function replayAll() {
   await resetSession();
   for (const move of replayMoves) {
     await tryMove(move);
-    await new Promise((r) => setTimeout(r, 180));
+    await new Promise((r) => setTimeout(r, 400));
   }
 }
 
@@ -247,40 +397,53 @@ btnReset.addEventListener("click", () => resetSession());
 btnSolve.addEventListener("click", () => solveLevel());
 btnReplay.addEventListener("click", () => replayAll());
 
-document.addEventListener("keydown", (ev) => {
-  const dir = KEY_MAP[ev.key];
-  if (dir) {
-    ev.preventDefault();
-    tryMove(dir);
-  }
+boardEl.addEventListener("pointerdown", (ev) => {
+  if (state?.won) return;
+  const pos = cellFromEvent(ev);
+  if (!pos || state.grid[pos.row][pos.col] === 0) return;
+  ev.preventDefault();
+  isDragging = true;
+  dragStart = pos;
+  dragEnd = pos;
+  pairSelection = null;
+  boardEl.setPointerCapture(ev.pointerId);
+  renderBoard();
 });
 
-boardEl.addEventListener(
-  "touchstart",
-  (ev) => {
-    const t = ev.changedTouches[0];
-    touchStart = { x: t.clientX, y: t.clientY };
-  },
-  { passive: true },
-);
+boardEl.addEventListener("pointermove", (ev) => {
+  if (!isDragging) return;
+  const pos = cellFromEvent(ev);
+  if (!pos) return;
+  dragEnd = pos;
+  renderBoard();
+});
 
-boardEl.addEventListener(
-  "touchend",
-  (ev) => {
-    if (!touchStart) return;
-    const t = ev.changedTouches[0];
-    const dx = t.clientX - touchStart.x;
-    const dy = t.clientY - touchStart.y;
-    touchStart = null;
-    if (Math.abs(dx) < 24 && Math.abs(dy) < 24) return;
-    if (Math.abs(dx) > Math.abs(dy)) {
-      tryMove(dx > 0 ? "right" : "left");
-    } else {
-      tryMove(dy > 0 ? "down" : "up");
-    }
-  },
-  { passive: true },
-);
+boardEl.addEventListener("pointerup", async (ev) => {
+  if (!isDragging) return;
+  boardEl.releasePointerCapture(ev.pointerId);
+  const moved =
+    dragStart &&
+    dragEnd &&
+    (dragStart.row !== dragEnd.row || dragStart.col !== dragEnd.col);
+
+  if (moved) {
+    await finishRectDrag();
+    return;
+  }
+
+  isDragging = false;
+  const pos = cellFromEvent(ev);
+  dragStart = null;
+  dragEnd = null;
+  if (pos) await handlePairTap(pos.row, pos.col);
+});
+
+boardEl.addEventListener("pointercancel", () => {
+  isDragging = false;
+  dragStart = null;
+  dragEnd = null;
+  renderBoard();
+});
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {

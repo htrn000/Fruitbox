@@ -5,11 +5,12 @@
   --text: #e8f5e9;
   --muted: #a5d6a7;
   --accent: #66bb6a;
-  --wall: #37474f;
-  --floor: #1b4332;
-  --goal: #ffd54f;
-  --box: #ef6c57;
-  --player: #42a5f5;
+  --cell: #1b4332;
+  --cell-empty: #0d1f16;
+  --highlight: #ffd54f;
+  --highlight-ok: #81c784;
+  --highlight-bad: #ef5350;
+  --selected: #42a5f5;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
 }
@@ -107,6 +108,7 @@ button:active:not(:disabled) {
   font-size: 0.9rem;
 }
 
+.selection-info,
 .solver-stats {
   margin: 0.25rem 0 0;
   font-size: 0.8rem;
@@ -118,38 +120,68 @@ button:active:not(:disabled) {
   justify-content: center;
   touch-action: none;
   user-select: none;
+  -webkit-user-select: none;
 }
 
 .board {
   display: grid;
-  gap: 2px;
+  gap: 3px;
   width: min(92vw, 360px);
-  aspect-ratio: 1;
 }
 
 .cell {
-  border-radius: 6px;
+  aspect-ratio: 1;
+  border-radius: 8px;
   display: grid;
   place-items: center;
-  font-size: clamp(1rem, 5vw, 1.5rem);
+  font-size: clamp(1.1rem, 5.5vw, 1.6rem);
+  font-weight: 600;
   line-height: 1;
+  background: var(--cell);
+  transition: background 0.15s, transform 0.15s, opacity 0.25s;
 }
 
-.cell.wall {
-  background: var(--wall);
+.cell.empty {
+  background: var(--cell-empty);
+  color: transparent;
 }
 
-.cell.floor {
-  background: var(--floor);
+.cell.selected {
+  box-shadow: inset 0 0 0 2px var(--selected);
 }
 
-.cell.goal {
-  background: color-mix(in srgb, var(--floor) 70%, #3e2723);
-  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--goal) 55%, transparent);
+.cell.in-rect {
+  background: color-mix(in srgb, var(--highlight) 35%, var(--cell));
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--highlight) 70%, transparent);
 }
 
-.goal-dot {
-  color: var(--goal);
+.cell.in-rect.valid {
+  background: color-mix(in srgb, var(--highlight-ok) 40%, var(--cell));
+  box-shadow: inset 0 0 0 2px var(--highlight-ok);
+}
+
+.cell.in-rect.invalid {
+  background: color-mix(in srgb, var(--highlight-bad) 30%, var(--cell));
+  box-shadow: inset 0 0 0 2px var(--highlight-bad);
+}
+
+.cell.clearing {
+  animation: pop-clear 0.35s ease forwards;
+}
+
+@keyframes pop-clear {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
 }
 
 .help {

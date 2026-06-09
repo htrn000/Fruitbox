@@ -8,10 +8,20 @@ import typer
 
 from fruitbox.engine import apply_moves
 from fruitbox.levels import list_level_ids, load_level
-from fruitbox.models import GameState
+from fruitbox.models import GameState, Move
 from fruitbox.solvers import SOLVERS
 
-app = typer.Typer(help="Fruitbox puzzle engine")
+app = typer.Typer(help="Fruitbox 10-sum puzzle engine")
+
+
+def _move_to_dict(move: Move) -> dict[str, object]:
+    return {
+        "kind": move.kind.value,
+        "r0": move.r0,
+        "c0": move.c0,
+        "r1": move.r1,
+        "c1": move.c1,
+    }
 
 
 @app.command()
@@ -53,22 +63,25 @@ def solve(
     if result is None:
         typer.echo("unsolved within node budget", err=True)
         raise typer.Exit(2)
-    moves = [m.value for m in result.moves]
     if json_output:
         typer.echo(
             json.dumps(
                 {
                     "level_id": level_id,
                     "solver": solver,
-                    "moves": moves,
+                    "moves": [_move_to_dict(m) for m in result.moves],
                     "nodes_expanded": result.nodes_expanded,
                     "max_frontier": result.max_frontier,
                 }
             )
         )
         return
-    typer.echo(f"solver={solver} moves={len(moves)} nodes={result.nodes_expanded}")
-    typer.echo(" ".join(moves))
+    typer.echo(f"solver={solver} moves={len(result.moves)} nodes={result.nodes_expanded}")
+    for move in result.moves:
+        if move.kind.value == "rectangle":
+            typer.echo(f"  rect ({move.r0},{move.c0})-({move.r1},{move.c1})")
+        else:
+            typer.echo(f"  pair ({move.r0},{move.c0})-({move.r1},{move.c1})")
     final = apply_moves(state, result.moves)
     if final is None or not final.is_won():
         typer.echo("warning: solution did not reach win state", err=True)

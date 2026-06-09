@@ -1,3 +1,3 @@
-"""Fruitbox puzzle engine — grid-based box-pushing game with pluggable solvers."""
+"""Fruitbox — 10-sum rectangle puzzle engine with pluggable solvers."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

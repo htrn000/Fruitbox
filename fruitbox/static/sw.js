@@ -1,6 +1,6 @@
 /** Fruitbox service worker — cache shell for offline play. */
 
-const CACHE = "fruitbox-v1";
+const CACHE = "fruitbox-v2";
 const PRECACHE = ["/", "/index.html", "/app.js", "/style.css", "/manifest.json"];
 
 self.addEventListener("install", (event) => {

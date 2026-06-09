@@ -1,33 +1,25 @@
-"""A* search with Manhattan heuristic."""
+"""A* search with remaining-cells heuristic."""
 
 from __future__ import annotations
 
 import heapq
 
-from fruitbox.engine import apply_move
-from fruitbox.models import GameState
-from fruitbox.solvers.base import DIRECTIONS, Solver, SolverResult, reconstruct_path
-
-
-def _manhattan(a: tuple[int, int], b: tuple[int, int]) -> int:
-    return abs(a[0] - b[0]) + abs(a[1] - b[1])
+from fruitbox.engine import apply_move, enumerate_moves
+from fruitbox.models import GameState, Move
+from fruitbox.solvers.base import Solver, SolverResult, reconstruct_path
 
 
 def _heuristic(state: GameState) -> float:
-    boxes = list(state.boxes)
-    goals = list(state.goals)
-    if not boxes:
+    """Admissible lower bound: at least one move per remaining cell group."""
+    remaining = state.remaining_cells()
+    if remaining == 0:
         return 0.0
-    total = 0
-    for box in boxes:
-        dists = sorted(_manhattan(box, g) for g in goals)
-        total += dists[0] if dists else 0
-    return float(total)
+    return float(remaining / 10)
 
 
 class AStarSolver(Solver):
     name = "astar"
-    description = "A* with Manhattan box-to-goal heuristic."
+    description = "A* — prioritizes fewer remaining cells; optimal when found."
 
     def solve(self, state: GameState, max_nodes: int = 500_000) -> SolverResult | None:
         start_key = state.key()
@@ -39,7 +31,7 @@ class AStarSolver(Solver):
         counter = 0
         heapq.heappush(heap, (_heuristic(state), counter, start_key, state))
         visited: set[tuple] = set()
-        came_from: dict[tuple, tuple[tuple, object]] = {}
+        came_from: dict[tuple, tuple[tuple, Move]] = {}
         nodes_expanded = 0
         max_frontier = 1
 
@@ -58,8 +50,8 @@ class AStarSolver(Solver):
                     max_frontier=max_frontier,
                 )
             g = g_score[key]
-            for direction in DIRECTIONS:
-                nxt = apply_move(current, direction)
+            for move in enumerate_moves(current):
+                nxt = apply_move(current, move)
                 if nxt is None:
                     continue
                 nxt_key = nxt.key()
@@ -67,7 +59,7 @@ class AStarSolver(Solver):
                 if nxt_key in g_score and ng >= g_score[nxt_key]:
                     continue
                 g_score[nxt_key] = ng
-                came_from[nxt_key] = (key, direction)
+                came_from[nxt_key] = (key, move)
                 counter += 1
                 heapq.heappush(heap, (ng + _heuristic(nxt), counter, nxt_key, nxt))
                 max_frontier = max(max_frontier, len(heap))

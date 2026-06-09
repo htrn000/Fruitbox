@@ -6,20 +6,13 @@ from abc import ABC, abstractmethod
 from collections import deque
 from dataclasses import dataclass
 
-from fruitbox.engine import apply_move
-from fruitbox.models import Direction, GameState
-
-DIRECTIONS: tuple[Direction, ...] = (
-    Direction.UP,
-    Direction.DOWN,
-    Direction.LEFT,
-    Direction.RIGHT,
-)
+from fruitbox.engine import apply_move, enumerate_moves
+from fruitbox.models import GameState, Move
 
 
 @dataclass(frozen=True)
 class SolverResult:
-    moves: list[Direction]
+    moves: list[Move]
     nodes_expanded: int
     max_frontier: int
 
@@ -34,11 +27,11 @@ class Solver(ABC):
 
 
 def reconstruct_path(
-    came_from: dict[tuple, tuple[tuple, Direction]],
+    came_from: dict[tuple, tuple[tuple, Move]],
     start_key: tuple,
     goal_key: tuple,
-) -> list[Direction]:
-    moves: list[Direction] = []
+) -> list[Move]:
+    moves: list[Move] = []
     current = goal_key
     while current != start_key:
         prev, move = came_from[current]
@@ -55,7 +48,7 @@ def breadth_first_search(
     pop_index: int = 0,
     priority_fn=None,
 ) -> SolverResult | None:
-    """Generic graph search; BFS uses pop_index=0, DFS uses -1."""
+    """Generic graph search over legal rectangle/pair clears."""
     start_key = state.key()
     if state.is_won():
         return SolverResult(moves=[], nodes_expanded=0, max_frontier=1)
@@ -73,7 +66,7 @@ def breadth_first_search(
         counter = 0
 
     visited: set[tuple] = {start_key}
-    came_from: dict[tuple, tuple[tuple, Direction]] = {}
+    came_from: dict[tuple, tuple[tuple, Move]] = {}
     nodes_expanded = 0
     max_frontier = 1
 
@@ -98,15 +91,15 @@ def breadth_first_search(
                 max_frontier=max_frontier,
             )
 
-        for direction in DIRECTIONS:
-            nxt = apply_move(current, direction)
+        for move in enumerate_moves(current):
+            nxt = apply_move(current, move)
             if nxt is None:
                 continue
             nxt_key = nxt.key()
             if nxt_key in visited:
                 continue
             visited.add(nxt_key)
-            came_from[nxt_key] = (key, direction)
+            came_from[nxt_key] = (key, move)
             if heap is not None:
                 counter += 1
                 heapq.heappush(heap, (priority_fn(nxt, counter), counter, nxt_key, nxt))

@@ -5,36 +5,42 @@ from __future__ import annotations
 from enum import Enum
 from typing import Self
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
-class Direction(str, Enum):
-    UP = "up"
-    DOWN = "down"
-    LEFT = "left"
-    RIGHT = "right"
-
-    @property
-    def delta(self) -> tuple[int, int]:
-        return _DELTAS[self]
+class MoveKind(str, Enum):
+    RECTANGLE = "rectangle"
+    PAIR = "pair"
 
 
-_DELTAS: dict[Direction, tuple[int, int]] = {
-    Direction.UP: (0, -1),
-    Direction.DOWN: (0, 1),
-    Direction.LEFT: (-1, 0),
-    Direction.RIGHT: (1, 0),
-}
+class Move(BaseModel):
+    """A legal game action: clear a sum-10 rectangle or adjacent pair."""
 
+    kind: MoveKind
+    r0: int
+    c0: int
+    r1: int
+    c1: int
 
-class Cell(str, Enum):
-    WALL = "#"
-    FLOOR = " "
-    GOAL = "."
-    BOX = "$"
-    PLAYER = "@"
-    BOX_ON_GOAL = "*"
-    PLAYER_ON_GOAL = "+"
+    model_config = {"frozen": True}
+
+    def normalized(self) -> Move:
+        if self.kind is MoveKind.RECTANGLE:
+            return Move(
+                kind=self.kind,
+                r0=min(self.r0, self.r1),
+                c0=min(self.c0, self.c1),
+                r1=max(self.r0, self.r1),
+                c1=max(self.c0, self.c1),
+            )
+        r0, c0, r1, c1 = self.r0, self.c0, self.r1, self.c1
+        if (r1, c1) < (r0, c0):
+            r0, c0, r1, c1 = r1, c1, r0, c0
+        return Move(kind=self.kind, r0=r0, c0=c0, r1=r1, c1=c1)
+
+    def key(self) -> tuple[str, int, int, int, int]:
+        n = self.normalized()
+        return (n.kind.value, n.r0, n.c0, n.r1, n.c1)
 
 
 class Level(BaseModel):
@@ -42,94 +48,75 @@ class Level(BaseModel):
     name: str
     width: int
     height: int
-    tiles: list[str] = Field(min_length=1)
+    grid: list[list[int]] = Field(min_length=1)
+
+    @field_validator("grid")
+    @classmethod
+    def validate_grid(cls, grid: list[list[int]]) -> list[list[int]]:
+        for row in grid:
+            for value in row:
+                if value < 0 or value > 9:
+                    raise ValueError(f"cell values must be 0–9, got {value}")
+        return grid
 
     def model_post_init(self, __context: object) -> None:
-        if len(self.tiles) != self.height:
-            raise ValueError(f"expected {self.height} tile rows, got {len(self.tiles)}")
-        for row in self.tiles:
+        if len(self.grid) != self.height:
+            raise ValueError(f"expected {self.height} rows, got {len(self.grid)}")
+        for row in self.grid:
             if len(row) != self.width:
                 raise ValueError(f"row width mismatch: expected {self.width}, got {len(row)}")
 
     @classmethod
-    def from_ascii(cls, level_id: str, name: str, ascii_map: str) -> Self:
-        rows = [line.rstrip("\n") for line in ascii_map.strip("\n").splitlines()]
-        height = len(rows)
-        width = max(len(row) for row in rows) if rows else 0
-        padded = [row.ljust(width) for row in rows]
-        return cls(id=level_id, name=name, width=width, height=height, tiles=padded)
+    def from_rows(cls, level_id: str, name: str, rows: list[str]) -> Self:
+        """Parse digit rows (0 = empty)."""
+        grid = [[int(ch) for ch in row] for row in rows]
+        height = len(grid)
+        width = max(len(row) for row in grid) if grid else 0
+        padded = [row + [0] * (width - len(row)) for row in grid]
+        return cls(id=level_id, name=name, width=width, height=height, grid=padded)
 
-    def cell_at(self, x: int, y: int) -> Cell | None:
-        if x < 0 or y < 0 or x >= self.width or y >= self.height:
-            return None
-        ch = self.tiles[y][x]
-        try:
-            return Cell(ch)
-        except ValueError:
-            raise ValueError(f"invalid cell character {ch!r} at ({x}, {y})") from None
+    def value_at(self, row: int, col: int) -> int:
+        if row < 0 or col < 0 or row >= self.height or col >= self.width:
+            raise IndexError(f"out of bounds: ({row}, {col})")
+        return self.grid[row][col]
 
 
 class GameState(BaseModel):
-    """Mutable-free game snapshot for engine and solvers."""
+    """Immutable board snapshot for engine and solvers."""
 
     level_id: str
     width: int
     height: int
-    walls: frozenset[tuple[int, int]]
-    goals: frozenset[tuple[int, int]]
-    boxes: frozenset[tuple[int, int]]
-    player: tuple[int, int]
+    grid: tuple[tuple[int, ...], ...]
 
     model_config = {"frozen": True}
 
     @classmethod
     def from_level(cls, level: Level) -> Self:
-        walls: set[tuple[int, int]] = set()
-        goals: set[tuple[int, int]] = set()
-        boxes: set[tuple[int, int]] = set()
-        player: tuple[int, int] | None = None
-
-        for y, row in enumerate(level.tiles):
-            for x, ch in enumerate(row):
-                cell = Cell(ch)
-                pos = (x, y)
-                if cell is Cell.WALL:
-                    walls.add(pos)
-                elif cell in (Cell.GOAL, Cell.BOX_ON_GOAL, Cell.PLAYER_ON_GOAL):
-                    goals.add(pos)
-                if cell in (Cell.BOX, Cell.BOX_ON_GOAL):
-                    boxes.add(pos)
-                if cell in (Cell.PLAYER, Cell.PLAYER_ON_GOAL):
-                    if player is not None:
-                        raise ValueError("level has multiple players")
-                    player = pos
-
-        if player is None:
-            raise ValueError("level has no player")
-
+        frozen = tuple(tuple(row) for row in level.grid)
         return cls(
             level_id=level.id,
             width=level.width,
             height=level.height,
-            walls=frozenset(walls),
-            goals=frozenset(goals),
-            boxes=frozenset(boxes),
-            player=player,
+            grid=frozen,
         )
 
+    def value_at(self, row: int, col: int) -> int:
+        return self.grid[row][col]
+
+    def remaining_cells(self) -> int:
+        return sum(1 for row in self.grid for value in row if value != 0)
+
+    def is_cleared(self) -> bool:
+        return self.remaining_cells() == 0
+
     def is_won(self) -> bool:
-        return self.boxes == self.goals
+        """Win when the board is empty or no legal moves remain."""
+        if self.is_cleared():
+            return True
+        from fruitbox.engine import enumerate_moves
 
-    def is_walkable(self, pos: tuple[int, int], ignore_boxes: bool = False) -> bool:
-        x, y = pos
-        if x < 0 or y < 0 or x >= self.width or y >= self.height:
-            return False
-        if pos in self.walls:
-            return False
-        if not ignore_boxes and pos in self.boxes:
-            return False
-        return True
+        return not enumerate_moves(self)
 
-    def key(self) -> tuple[tuple[int, int], frozenset[tuple[int, int]]]:
-        """Hashable state key for search algorithms."""
-        return (self.player, self.boxes)
+    def key(self) -> tuple[tuple[int, ...], ...]:
+        return self.grid

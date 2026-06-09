@@ -9,9 +9,9 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from fruitbox.engine import apply_move
+from fruitbox.engine import apply_move, enumerate_moves
 from fruitbox.levels import list_level_ids, load_level
-from fruitbox.models import Direction, GameState, Level
+from fruitbox.models import GameState, Level, Move, MoveKind
 from fruitbox.solvers import SOLVERS
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -26,15 +26,18 @@ class StateResponse(BaseModel):
     level_id: str
     width: int
     height: int
-    walls: list[list[int]]
-    goals: list[list[int]]
-    boxes: list[list[int]]
-    player: list[int]
+    grid: list[list[int]]
+    remaining: int
     won: bool
+    legal_moves: int
 
 
 class MoveRequest(BaseModel):
-    direction: Direction
+    kind: MoveKind
+    r0: int
+    c0: int
+    r1: int
+    c1: int
 
 
 class SolveRequest(BaseModel):
@@ -43,10 +46,18 @@ class SolveRequest(BaseModel):
     max_nodes: int = Field(default=500_000, ge=1, le=2_000_000)
 
 
+class SolveMoveResponse(BaseModel):
+    kind: str
+    r0: int
+    c0: int
+    r1: int
+    c1: int
+
+
 class SolveResponse(BaseModel):
     solver: str
     solved: bool
-    moves: list[str]
+    moves: list[SolveMoveResponse]
     nodes_expanded: int
     max_frontier: int
 
@@ -57,23 +68,19 @@ class SolverInfo(BaseModel):
 
 
 def _state_response(state: GameState) -> StateResponse:
-    def pos_list(positions: frozenset[tuple[int, int]]) -> list[list[int]]:
-        return [[x, y] for x, y in sorted(positions)]
-
     return StateResponse(
         level_id=state.level_id,
         width=state.width,
         height=state.height,
-        walls=pos_list(state.walls),
-        goals=pos_list(state.goals),
-        boxes=pos_list(state.boxes),
-        player=[state.player[0], state.player[1]],
+        grid=[list(row) for row in state.grid],
+        remaining=state.remaining_cells(),
         won=state.is_won(),
+        legal_moves=len(enumerate_moves(state)),
     )
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Fruitbox", description="Grid puzzle engine and solver playground")
+    app = FastAPI(title="Fruitbox", description="10-sum rectangle puzzle engine and solver playground")
     sessions: dict[str, GameState] = {}
 
     @app.get("/api/health")
@@ -120,7 +127,8 @@ def create_app() -> FastAPI:
         state = sessions.get(level_id)
         if state is None:
             raise HTTPException(status_code=404, detail="session not found")
-        nxt = apply_move(state, body.direction)
+        game_move = Move(kind=body.kind, r0=body.r0, c0=body.c0, r1=body.r1, c1=body.c1)
+        nxt = apply_move(state, game_move)
         if nxt is None:
             raise HTTPException(status_code=400, detail="illegal move")
         sessions[level_id] = nxt
@@ -158,7 +166,16 @@ def create_app() -> FastAPI:
         return SolveResponse(
             solver=body.solver,
             solved=True,
-            moves=[m.value for m in result.moves],
+            moves=[
+                SolveMoveResponse(
+                    kind=m.kind.value,
+                    r0=m.r0,
+                    c0=m.c0,
+                    r1=m.r1,
+                    c1=m.c1,
+                )
+                for m in result.moves
+            ],
             nodes_expanded=result.nodes_expanded,
             max_frontier=result.max_frontier,
         )
