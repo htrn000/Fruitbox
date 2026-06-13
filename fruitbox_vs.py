@@ -332,6 +332,7 @@ class FruitBoxVs:
     # ── main loop ─────────────────────────────────────────────────────
 
     def run(self):
+        self.clock.tick()  # discard time accumulated during model loading
         while True:
             dt = self.clock.tick(FPS) / 1000.0
 
