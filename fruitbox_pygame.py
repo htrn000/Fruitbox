@@ -75,8 +75,10 @@ class FruitBoxPygame:
 
         self.game_over  = False
         self.over_reason = ""
-        self.pause_btn_rect = pygame.Rect(0, 0, 0, 0)
-        self.menu_btn_rect  = pygame.Rect(0, 0, 0, 0)
+        self.pause_btn_rect  = pygame.Rect(0, 0, 0, 0)
+        self.menu_btn_rect   = pygame.Rect(0, 0, 0, 0)
+        self.close_over_rect = pygame.Rect(0, 0, 0, 0)
+        self.show_game_over  = True
 
         # overlay surface for translucent selection
         self.overlay = pygame.Surface((WIN_W, WIN_H), pygame.SRCALPHA)
@@ -241,13 +243,24 @@ class FruitBoxPygame:
         restart_surf = self.font_over_sub.render("Press R to play again", True, TEXT_SECONDARY)
         self.screen.blit(restart_surf, (card_x + (card_w - restart_surf.get_width()) // 2, card_y + 146))
 
+        font_btn = pygame.font.SysFont("Arial", 13, bold=True)
+        x_surf = font_btn.render("X", True, TEXT_SECONDARY)
+        x_pad  = 6
+        x_w    = x_surf.get_width()  + x_pad * 2
+        x_h    = x_surf.get_height() + x_pad * 2
+        self.close_over_rect = pygame.Rect(card_x + card_w - x_w - 8, card_y + 8, x_w, x_h)
+        if self.close_over_rect.collidepoint(pygame.mouse.get_pos()):
+            pygame.draw.rect(self.screen, (230, 228, 222), self.close_over_rect, border_radius=5)
+        self.screen.blit(x_surf, (self.close_over_rect.x + x_pad, self.close_over_rect.y + x_pad))
+
     def restart(self):
         self.game.reset()
-        self.drag_start = None
-        self.drag_end   = None
-        self.sel_valid  = False
-        self.game_over  = False
-        self.over_reason = ""
+        self.drag_start     = None
+        self.drag_end       = None
+        self.sel_valid      = False
+        self.game_over      = False
+        self.over_reason    = ""
+        self.show_game_over = True
 
     def run(self):
         while True:
@@ -264,10 +277,15 @@ class FruitBoxPygame:
                     if event.key == pygame.K_r:
                         self.restart()
 
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    if self.game_over and self.show_game_over and self.close_over_rect.collidepoint(event.pos):
+                        self.show_game_over = False
+                        continue
+                    if self.menu_btn_rect.collidepoint(event.pos):
+                        return
+
                 if not self.game_over:
                     if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                        if self.menu_btn_rect.collidepoint(event.pos):
-                            return
                         if self.pause_btn_rect.collidepoint(event.pos):
                             self.game.toggle_pause()
                             self.drag_start = self.drag_end = None
@@ -309,7 +327,7 @@ class FruitBoxPygame:
             self.draw_grid()
             if self.game.paused:
                 self.draw_paused()
-            if self.game_over:
+            if self.game_over and self.show_game_over:
                 self.draw_game_over()
 
             pygame.display.flip()

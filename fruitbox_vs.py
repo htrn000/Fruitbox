@@ -82,6 +82,7 @@ class FruitBoxVs:
         self.toggle_btn_rect  = pygame.Rect(0, 0, 0, 0)
         self.pause_btn_rect   = pygame.Rect(0, 0, 0, 0)
         self.menu_btn_rect    = pygame.Rect(0, 0, 0, 0)
+        self.close_over_rect  = pygame.Rect(0, 0, 0, 0)
         self.reset()
 
     # ── board x offsets ───────────────────────────────────────────────
@@ -248,6 +249,16 @@ class FruitBoxVs:
         self.screen.blit(rsn,   (cx + (card_w - rsn.get_width())   // 2, cy + 74))
         self.screen.blit(again, (cx + (card_w - again.get_width()) // 2, cy + 112))
 
+        x_surf = self.font_btn.render("X", True, TEXT_SECONDARY)
+        x_pad  = 6
+        x_w    = x_surf.get_width()  + x_pad * 2
+        x_h    = x_surf.get_height() + x_pad * 2
+        self.close_over_rect = pygame.Rect(cx + card_w - x_w - 8, cy + 8, x_w, x_h)
+        x_hov = self.close_over_rect.collidepoint(pygame.mouse.get_pos())
+        if x_hov:
+            pygame.draw.rect(self.screen, (230, 228, 222), self.close_over_rect, border_radius=5)
+        self.screen.blit(x_surf, (self.close_over_rect.x + x_pad, self.close_over_rect.y + x_pad))
+
     # ── AI logic ──────────────────────────────────────────────────────
 
     def _run_solver(self, grid):
@@ -303,10 +314,11 @@ class FruitBoxVs:
         self.ai_sel_clear_at = 0
         self.last_ai_move    = time.time() + AI_INTERVAL
 
-        self.human_over  = False
-        self.ai_over     = False
-        self.game_over   = False
-        self.over_reason = ""
+        self.human_over      = False
+        self.ai_over         = False
+        self.game_over       = False
+        self.over_reason     = ""
+        self.show_game_over  = True
 
         self._solver_moves = []
         self._solver_ready = self.opponent != "solver"  # rl_model needs no solver
@@ -335,6 +347,9 @@ class FruitBoxVs:
                         self.reset()
 
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    if self.game_over and self.show_game_over and self.close_over_rect.collidepoint(event.pos):
+                        self.show_game_over = False
+                        continue
                     if self.menu_btn_rect.collidepoint(event.pos):
                         return
                     if self.toggle_btn_rect.collidepoint(event.pos):
@@ -406,7 +421,7 @@ class FruitBoxVs:
                 ai_cover = pygame.Rect(self._ai_x(), HUD_H + PADDING, BOARD_W, BOARD_H)
                 pygame.draw.rect(self.screen, (0, 0, 0), ai_cover)
 
-            if self.game_over:
+            if self.game_over and self.show_game_over:
                 self._draw_game_over()
             pygame.display.flip()
 
