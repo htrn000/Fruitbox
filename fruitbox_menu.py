@@ -161,6 +161,13 @@ class FruitBoxMenu:
         elif mode == "vs_ai":
             from fruitbox_vs import FruitBoxVs, WIN_W as VS_W, WIN_H as VS_H
             screen = pygame.display.set_mode((VS_W, VS_H))
+            screen.fill(BG)
+            loading_surf = self.font_btn.render("Loading model…", True, TEXT_SECONDARY)
+            screen.blit(loading_surf, (
+                (VS_W - loading_surf.get_width())  // 2,
+                (VS_H - loading_surf.get_height()) // 2,
+            ))
+            pygame.display.flip()
             FruitBoxVs(opponent="rl_model", screen=screen, grid_type=self.vs_grid_type).run()
             self.screen = pygame.display.set_mode((MENU_W, MENU_H))
 
