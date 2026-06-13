@@ -1,6 +1,7 @@
 import sys
 import os
 import time
+import math
 
 import pygame
 from sb3_contrib import MaskablePPO
@@ -60,6 +61,7 @@ class FruitBoxAiWatch:
     def reset(self):
         self.ai_env.reset()
         self.game_over       = False
+        self.game_over_at    = None
         self.show_game_over  = True
         self.last_ai_move    = time.time() + AI_INTERVAL
         self.sel_start       = None
@@ -157,9 +159,10 @@ class FruitBoxAiWatch:
         pygame.draw.rect(self.screen, (255, 255, 255), card, border_radius=14)
         pygame.draw.rect(self.screen, CELL_BORDER, card, width=1, border_radius=14)
 
-        over  = self.font_over.render("Done", True, TEXT_PRIMARY)
-        score = self.font_sub.render(f"Final score: {self.game.score}", True, TEXT_SECONDARY)
-        again = self.font_sub.render("Press R to watch again", True, TEXT_SECONDARY)
+        remaining = max(0.0, 5.0 - (time.time() - self.game_over_at)) if self.game_over_at else 5.0
+        over    = self.font_over.render("Done", True, TEXT_PRIMARY)
+        score   = self.font_sub.render(f"Final score: {self.game.score}", True, TEXT_SECONDARY)
+        again   = self.font_sub.render(f"Restarting in {math.ceil(remaining)}…", True, TEXT_SECONDARY)
         self.screen.blit(over,  (cx + (card_w - over.get_width())  // 2, cy + 20))
         self.screen.blit(score, (cx + (card_w - score.get_width()) // 2, cy + 72))
         self.screen.blit(again, (cx + (card_w - again.get_width()) // 2, cy + 112))
@@ -185,7 +188,8 @@ class FruitBoxAiWatch:
         self.sel_clear_at = time.time() + 0.3
         _, no_moves = self.game.apply_move(r0, c0, r1, c1)
         if no_moves:
-            self.game_over = True
+            self.game_over    = True
+            self.game_over_at = time.time()
 
     # ── main loop ─────────────────────────────────────────────────────
 
@@ -215,7 +219,8 @@ class FruitBoxAiWatch:
             if not self.game_over:
                 timed_out = self.game.tick(dt)
                 if timed_out:
-                    self.game_over = True
+                    self.game_over    = True
+                    self.game_over_at = time.time()
 
                 now = time.time()
                 if now >= self.last_ai_move:
@@ -223,6 +228,11 @@ class FruitBoxAiWatch:
                     self._step_ai()
                 if now >= self.sel_clear_at:
                     self.sel_start = self.sel_end = None
+
+            if self.game_over and self.show_game_over and self.game_over_at is not None:
+                if time.time() - self.game_over_at >= 5.0:
+                    self.reset()
+                    continue
 
             self.screen.fill(BG)
             self._draw_hud()

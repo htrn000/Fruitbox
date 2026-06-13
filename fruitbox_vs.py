@@ -385,13 +385,13 @@ class FruitBoxVs:
                             self.last_ai_move = time.time() + AI_INTERVAL
                         continue
 
-                    if not self.game_over and not self.human_over and not self.human_game.paused:
+                    if self.game_over or (not self.human_over and not self.human_game.paused):
                         cell = self._pixel_to_cell(*event.pos)
                         if cell:
                             self.drag_start = self.drag_end = cell
 
                 if event.type == pygame.MOUSEMOTION and self.drag_start:
-                    if not self.game_over and not self.human_over and not self.human_game.paused:
+                    if self.game_over or (not self.human_over and not self.human_game.paused):
                         cell = self._pixel_to_cell(*event.pos)
                         if cell:
                             self.drag_end = cell

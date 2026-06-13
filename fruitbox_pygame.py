@@ -300,35 +300,34 @@ class FruitBoxPygame:
                         self.restart()
                         continue
 
-                if not self.game_over:
-                    if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                        if self.pause_btn_rect.collidepoint(event.pos):
-                            self.game.toggle_pause()
-                            self.drag_start = self.drag_end = None
-                            continue
-                        if not self.game.paused:
-                            cell = self.pixel_to_cell(*event.pos)
-                            if cell:
-                                self.drag_start = cell
-                                self.drag_end   = cell
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    if not self.game_over and self.pause_btn_rect.collidepoint(event.pos):
+                        self.game.toggle_pause()
+                        self.drag_start = self.drag_end = None
+                        continue
+                    if self.game_over or not self.game.paused:
+                        cell = self.pixel_to_cell(*event.pos)
+                        if cell:
+                            self.drag_start = cell
+                            self.drag_end   = cell
 
-                    if event.type == pygame.MOUSEMOTION and not self.game.paused:
-                        if self.drag_start:
-                            cell = self.pixel_to_cell(*event.pos)
-                            if cell:
-                                self.drag_end = cell
+                if event.type == pygame.MOUSEMOTION and self.drag_start:
+                    if self.game_over or not self.game.paused:
+                        cell = self.pixel_to_cell(*event.pos)
+                        if cell:
+                            self.drag_end = cell
 
-                    if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
-                        if not self.game.paused:
-                            bounds = self.selection_bounds()
-                            if bounds:
-                                r1, c1, r2, c2 = bounds
-                                _, no_moves = self.game.apply_move(r1, c1, r2, c2)
-                                if no_moves:
-                                    self.game_over  = True
-                                    self.over_reason = "No more valid moves"
-                        self.drag_start = None
-                        self.drag_end   = None
+                if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                    if not self.game_over and not self.game.paused:
+                        bounds = self.selection_bounds()
+                        if bounds:
+                            r1, c1, r2, c2 = bounds
+                            _, no_moves = self.game.apply_move(r1, c1, r2, c2)
+                            if no_moves:
+                                self.game_over  = True
+                                self.over_reason = "No more valid moves"
+                    self.drag_start = None
+                    self.drag_end   = None
 
             # tick timer
             if not self.game_over:
