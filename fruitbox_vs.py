@@ -208,6 +208,15 @@ class FruitBoxVs:
         pygame.draw.rect(self.screen, BTN_BORDER_COLOR, self.menu_btn_rect, width=1, border_radius=5)
         self.screen.blit(menu_surf, (m_x + btn_pad_x, m_y + btn_pad_y))
 
+    def _draw_paused(self):
+        grid_rect = pygame.Rect(self._human_x(), HUD_H + PADDING, BOARD_W, BOARD_H)
+        pygame.draw.rect(self.screen, (180, 178, 170), grid_rect)
+        surf = self.font_sub.render("Paused", True, TEXT_PRIMARY)
+        self.screen.blit(surf, (
+            grid_rect.x + (BOARD_W - surf.get_width())  // 2,
+            grid_rect.y + (BOARD_H - surf.get_height()) // 2,
+        ))
+
     def _draw_thinking(self):
         ax    = self._ai_x()
         cover = pygame.Rect(ax, HUD_H + PADDING, BOARD_W, BOARD_H)
@@ -333,27 +342,30 @@ class FruitBoxVs:
                         continue
                     if self.pause_btn_rect.collidepoint(event.pos):
                         self.human_game.toggle_pause()
+                        self.drag_start = self.drag_end = None
+                        if not self.human_game.paused:
+                            self.last_ai_move = time.time() + AI_INTERVAL
                         continue
 
-                    if not self.game_over and not self.human_over:
+                    if not self.game_over and not self.human_over and not self.human_game.paused:
                         cell = self._pixel_to_cell(*event.pos)
                         if cell:
                             self.drag_start = self.drag_end = cell
 
                 if event.type == pygame.MOUSEMOTION and self.drag_start:
-                    if not self.game_over and not self.human_over:
+                    if not self.game_over and not self.human_over and not self.human_game.paused:
                         cell = self._pixel_to_cell(*event.pos)
                         if cell:
                             self.drag_end = cell
 
                 if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
-                    if not self.game_over and not self.human_over:
+                    if not self.game_over and not self.human_over and not self.human_game.paused:
                         bounds = self._selection_bounds()
                         if bounds:
                             _, no_moves = self.human_game.apply_move(*bounds)
                             if no_moves:
                                 self.human_over = True
-                        self.drag_start = self.drag_end = None
+                    self.drag_start = self.drag_end = None
 
             if not self.game_over:
                 timed_out = self.human_game.tick(dt)
@@ -365,7 +377,7 @@ class FruitBoxVs:
 
                 now = time.time()
 
-                if not self.ai_over and now >= self.last_ai_move:
+                if not self.ai_over and not self.human_game.paused and now >= self.last_ai_move:
                     self.last_ai_move = now + AI_INTERVAL
                     self._step_ai()
 
@@ -383,6 +395,8 @@ class FruitBoxVs:
             self.screen.fill(BG)
             self._draw_hud()
             self._draw_board(self.human_game, self._human_x(), self.drag_start, self.drag_end)
+            if self.human_game.paused:
+                self._draw_paused()
 
             if self.opponent == "solver" and not self._solver_ready:
                 self._draw_thinking()
