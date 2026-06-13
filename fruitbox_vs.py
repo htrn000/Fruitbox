@@ -389,8 +389,8 @@ class FruitBoxVs:
                     h, a = self.human_game.score, self.ai_game.score
                     opp  = "Solver" if self.opponent == "solver" else "RL Model"
                     if   h > a: self.over_reason = f"You win!  {h} – {a}"
-                    elif a > h: self.over_reason = f"{opp} wins!  {a} – {h}"
-                    else:       self.over_reason = f"Tie!  {h} each"
+                    elif a > h: self.over_reason = f"{opp} wins!  {h} – {a}"
+                    else:       self.over_reason = f"Tie!  {h} – {a}"
 
             self.screen.fill(BG)
             self._draw_hud()
