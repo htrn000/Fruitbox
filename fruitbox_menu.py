@@ -3,6 +3,7 @@ import pygame
 
 from fruitbox_game import FruitBoxGame
 from fruitbox_settings import SettingsOverlay
+from fruitbox_stats_screen import StatsOverlay
 from fruitbox_pygame import (
     FruitBoxPygame,
     WIN_W as GAME_W, WIN_H as GAME_H,
@@ -41,6 +42,8 @@ class FruitBoxMenu:
         self.right_arrow_rect = pygame.Rect(0, 0, 0, 0)
         self.settings          = SettingsOverlay()
         self.settings_btn_rect = pygame.Rect(0, 0, 0, 0)
+        self.stats_overlay     = StatsOverlay()
+        self.stats_btn_rect    = pygame.Rect(0, 0, 0, 0)
         self.watch_btn_rect    = pygame.Rect(MENU_W - 60, MENU_H - 30, 60, 30)
 
     @property
@@ -133,20 +136,32 @@ class FruitBoxMenu:
         hint = self.font_hint.render("Press ESC during a game to return here", True, TEXT_SECONDARY)
         self.screen.blit(hint, ((MENU_W - hint.get_width()) // 2, MENU_H - 26))
 
-        # settings button (top-right corner)
+        # top-right buttons (Settings + Stats)
+        btn_pad_x, btn_pad_y = 10, 5
+        btn_y = 14
+
         s_surf = self.font_hint.render("Settings", True, TEXT_SECONDARY)
-        s_pad_x, s_pad_y = 10, 5
-        s_w = s_surf.get_width()  + s_pad_x * 2
-        s_h = s_surf.get_height() + s_pad_y * 2
+        s_w = s_surf.get_width()  + btn_pad_x * 2
+        s_h = s_surf.get_height() + btn_pad_y * 2
         s_x = MENU_W - s_w - 14
-        s_y = 14
-        self.settings_btn_rect = pygame.Rect(s_x, s_y, s_w, s_h)
+        self.settings_btn_rect = pygame.Rect(s_x, btn_y, s_w, s_h)
         s_hov = self.settings_btn_rect.collidepoint(mouse)
         pygame.draw.rect(self.screen, (190, 188, 180) if s_hov else (210, 208, 200), self.settings_btn_rect, border_radius=5)
         pygame.draw.rect(self.screen, (160, 158, 150), self.settings_btn_rect, width=1, border_radius=5)
-        self.screen.blit(s_surf, (s_x + s_pad_x, s_y + s_pad_y))
+        self.screen.blit(s_surf, (s_x + btn_pad_x, btn_y + btn_pad_y))
+
+        st_surf = self.font_hint.render("Stats", True, TEXT_SECONDARY)
+        st_w = st_surf.get_width()  + btn_pad_x * 2
+        st_h = st_surf.get_height() + btn_pad_y * 2
+        st_x = s_x - st_w - 8
+        self.stats_btn_rect = pygame.Rect(st_x, btn_y, st_w, st_h)
+        st_hov = self.stats_btn_rect.collidepoint(mouse)
+        pygame.draw.rect(self.screen, (190, 188, 180) if st_hov else (210, 208, 200), self.stats_btn_rect, border_radius=5)
+        pygame.draw.rect(self.screen, (160, 158, 150), self.stats_btn_rect, width=1, border_radius=5)
+        self.screen.blit(st_surf, (st_x + btn_pad_x, btn_y + btn_pad_y))
 
         self.settings.draw(self.screen)
+        self.stats_overlay.draw(self.screen)
         pygame.display.flip()
 
     # ── menu loop ─────────────────────────────────────────────────────
@@ -160,9 +175,14 @@ class FruitBoxMenu:
                     sys.exit()
                 if self.settings.handle_event(event):
                     continue
+                if self.stats_overlay.handle_event(event):
+                    continue
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     if self.settings_btn_rect.collidepoint(event.pos):
                         self.settings.toggle()
+                        continue
+                    if self.stats_btn_rect.collidepoint(event.pos):
+                        self.stats_overlay.toggle()
                         continue
                     if self.left_arrow_rect.collidepoint(event.pos):
                         self.grid_type_idx = (self.grid_type_idx - 1) % len(GRID_TYPES)
