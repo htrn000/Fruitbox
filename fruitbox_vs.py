@@ -12,6 +12,7 @@ from sb3_contrib.common.wrappers import ActionMasker
 from fruitbox_game import FruitBoxGame
 from fruitbox_env import FruitBoxEnv
 import fruitbox_stats
+import fruitbox_config
 from fruitbox_pygame import (
     FPS, BG, CELL_BG, CELL_BORDER, CLEARED_BG,
     SEL_FILL, SEL_BORDER, VALID_FILL, VALID_BOR,
@@ -372,8 +373,13 @@ class FruitBoxVs:
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE:
                         return
-                    if event.key == pygame.K_r:
+                    if event.key == fruitbox_config.get("key_restart"):
                         self.reset()
+                    if event.key == fruitbox_config.get("key_pause") and not self.game_over:
+                        self.human_game.toggle_pause()
+                        self.drag_start = self.drag_end = None
+                        if not self.human_game.paused:
+                            self.last_ai_move = time.time() + AI_INTERVAL
 
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     if self.game_over and self.show_game_over and self.close_over_rect.collidepoint(event.pos):

@@ -4,6 +4,7 @@ import sys
 import time
 import os
 import fruitbox_stats
+import fruitbox_config
 from fruitbox_game import FruitBoxGame
 
 # ── layout constants ──────────────────────────────────────────────
@@ -282,8 +283,11 @@ class FruitBoxPygame:
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE:
                         return
-                    if event.key == pygame.K_r:
+                    if event.key == fruitbox_config.get("key_restart"):
                         self.restart()
+                    if event.key == fruitbox_config.get("key_pause") and not self.game_over:
+                        self.game.toggle_pause()
+                        self.drag_start = self.drag_end = None
 
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     if self.game_over and self.show_game_over:
