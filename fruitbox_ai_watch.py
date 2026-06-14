@@ -7,6 +7,7 @@ import pygame
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.wrappers import ActionMasker
 
+import fruitbox_stats
 from fruitbox_env import FruitBoxEnv
 from fruitbox_pygame import (
     FPS, CELL, PADDING, HUD_H, COLS, ROWS, WIN_W, WIN_H,
@@ -60,13 +61,15 @@ class FruitBoxAiWatch:
 
     def reset(self):
         self.ai_env.reset()
-        self.game_over       = False
-        self.game_over_at    = None
-        self.show_game_over  = True
-        self.last_ai_move    = time.time() + AI_INTERVAL
-        self.sel_start       = None
-        self.sel_end         = None
-        self.sel_clear_at    = 0
+        self.game_over        = False
+        self.game_over_at     = None
+        self.show_game_over   = True
+        self.last_ai_move     = time.time() + AI_INTERVAL
+        self.sel_start        = None
+        self.sel_end          = None
+        self.sel_clear_at     = 0
+        self._game_start      = time.time()
+        self._result_recorded = False
 
     # ── drawing ───────────────────────────────────────────────────────
 
@@ -190,6 +193,15 @@ class FruitBoxAiWatch:
         if no_moves:
             self.game_over    = True
             self.game_over_at = time.time()
+            if not self._result_recorded:
+                fruitbox_stats.record(fruitbox_stats.GameInfo(
+                    gamemode="watch_ai",
+                    grid_type=self.game.grid_type,
+                    self_score=self.game.score,
+                    time_elapsed=time.time() - self._game_start,
+                    seed=self.game.seed,
+                ))
+                self._result_recorded = True
 
     # ── main loop ─────────────────────────────────────────────────────
 
@@ -221,6 +233,15 @@ class FruitBoxAiWatch:
                 if timed_out:
                     self.game_over    = True
                     self.game_over_at = time.time()
+                    if not self._result_recorded:
+                        fruitbox_stats.record(
+                            gamemode="watch_ai",
+                            grid_type=self.game.grid_type,
+                            self_score=self.game.score,
+                            time_elapsed=time.time() - self._game_start,
+                            seed=self.game.seed,
+                        )
+                        self._result_recorded = True
 
                 now = time.time()
                 if now >= self.last_ai_move:

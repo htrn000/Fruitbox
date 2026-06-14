@@ -86,7 +86,7 @@ class FruitBoxVs:
         self.menu_btn_rect    = pygame.Rect(0, 0, 0, 0)
         self.restart_btn_rect = pygame.Rect(0, 0, 0, 0)
         self.close_over_rect  = pygame.Rect(0, 0, 0, 0)
-        self.stats            = fruitbox_stats.load()
+        self.stats            = fruitbox_stats.get_vs_stats()
         self.reset()
 
     # ── board x offsets ───────────────────────────────────────────────
@@ -338,6 +338,7 @@ class FruitBoxVs:
         self.over_reason        = ""
         self.show_game_over     = True
         self._result_recorded   = False
+        self._game_start        = time.time()
 
         self._solver_moves = []
         self._solver_ready = self.opponent != "solver"  # rl_model needs no solver
@@ -430,7 +431,15 @@ class FruitBoxVs:
                     elif a > h: self.over_reason = f"{opp} wins!  {h} – {a}"; result = "loss"
                     else:       self.over_reason = f"Tie!  {h} – {a}"; result = "tie"
                     if not self._result_recorded:
-                        self.stats = fruitbox_stats.record(result)
+                        fruitbox_stats.record(fruitbox_stats.GameInfo(
+                            gamemode="vs_ai",
+                            grid_type=self.grid_type,
+                            self_score=h,
+                            opp_score=a,
+                            time_elapsed=time.time() - self._game_start,
+                            seed=self.human_game.seed,
+                        ))
+                        self.stats = fruitbox_stats.get_vs_stats()
                         self._result_recorded = True
 
             self.screen.fill(BG)

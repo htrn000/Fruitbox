@@ -23,7 +23,7 @@ fruitbox_ppo_final/
 fruitbox_watch_*.zip
 
 # User data
-fruitbox_stats.json
+fruitbox_stats.db
 
 # OS
 .DS_Store

@@ -1,5 +1,7 @@
 import pygame
 import sys
+import time
+import fruitbox_stats
 from fruitbox_game import FruitBoxGame
 
 # ── layout constants ──────────────────────────────────────────────
@@ -73,8 +75,10 @@ class FruitBoxPygame:
         self.drag_end   = None   # (row, col) currently hovering
         self.sel_valid  = False
 
-        self.game_over  = False
-        self.over_reason = ""
+        self.game_over        = False
+        self.over_reason      = ""
+        self._game_start      = time.time()
+        self._result_recorded = False
         self.pause_btn_rect   = pygame.Rect(0, 0, 0, 0)
         self.menu_btn_rect    = pygame.Rect(0, 0, 0, 0)
         self.restart_btn_rect = pygame.Rect(0, 0, 0, 0)
@@ -264,12 +268,14 @@ class FruitBoxPygame:
 
     def restart(self):
         self.game.reset()
-        self.drag_start     = None
-        self.drag_end       = None
-        self.sel_valid      = False
-        self.game_over      = False
-        self.over_reason    = ""
-        self.show_game_over = True
+        self.drag_start       = None
+        self.drag_end         = None
+        self.sel_valid        = False
+        self.game_over        = False
+        self.over_reason      = ""
+        self.show_game_over   = True
+        self._game_start      = time.time()
+        self._result_recorded = False
 
     def run(self):
         while True:
@@ -320,8 +326,17 @@ class FruitBoxPygame:
                             r1, c1, r2, c2 = bounds
                             _, no_moves = self.game.apply_move(r1, c1, r2, c2)
                             if no_moves:
-                                self.game_over  = True
+                                self.game_over   = True
                                 self.over_reason = "No more valid moves"
+                                if not self._result_recorded:
+                                    fruitbox_stats.record(fruitbox_stats.GameInfo(
+                                        gamemode="single_player",
+                                        grid_type=self.game.grid_type,
+                                        self_score=self.game.score,
+                                        time_elapsed=time.time() - self._game_start,
+                                        seed=self.game.seed,
+                                    ))
+                                    self._result_recorded = True
                     self.drag_start = None
                     self.drag_end   = None
 
@@ -329,8 +344,17 @@ class FruitBoxPygame:
             if not self.game_over:
                 timed_out = self.game.tick(dt)
                 if timed_out:
-                    self.game_over  = True
+                    self.game_over   = True
                     self.over_reason = "Time's up!"
+                    if not self._result_recorded:
+                        fruitbox_stats.record(fruitbox_stats.GameInfo(
+                            gamemode="single_player",
+                            grid_type=self.game.grid_type,
+                            self_score=self.game.score,
+                            time_elapsed=time.time() - self._game_start,
+                            seed=self.game.seed,
+                        ))
+                        self._result_recorded = True
 
             # draw
             self.screen.fill(BG)
