@@ -1,3 +1,5 @@
+import random
+import numpy as np
 from fruitbox_grid import FruitBoxGrid
 
 
@@ -12,6 +14,7 @@ class FruitBoxGame:
         self.paused = False
         self._grid_gen = FruitBoxGrid(rows, columns)
         self.grid = None
+        self.seed = None
 
     _EXAMPLE_GRIDS = [
         #116
@@ -55,10 +58,10 @@ class FruitBoxGame:
         ],
     ]
 
-    def reset(self):
+    def reset(self, seed=None):
+        self.seed = seed if seed is not None else random.randint(0, 2**31 - 1)
+        self._grid_gen.rng = np.random.default_rng(self.seed)
         self.grid = self._grid_gen.generate(self.grid_type)
-        # self.grid = np.array(self._EXAMPLE_GRIDS[0])
-
         self.score = 0
         self.elapsed = 0.0
         return self.grid.copy()
