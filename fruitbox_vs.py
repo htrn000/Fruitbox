@@ -5,6 +5,7 @@ import threading
 import argparse
 
 import pygame
+import pygame_gui
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.wrappers import ActionMasker
 
@@ -16,12 +17,15 @@ from fruitbox_pygame import (
     SEL_FILL, SEL_BORDER, VALID_FILL, VALID_BOR,
     TEXT_PRIMARY, TEXT_SECONDARY,
     TIMER_OK, TIMER_WARN, TIMER_DANGER,
+    _THEME,
 )
 from solver import solve
+
 
 def _resource(rel):
     base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
     return os.path.join(base, rel)
+
 
 MODEL_PATH  = _resource("fruitbox_ppo_final")
 AI_INTERVAL = 0.5
@@ -38,9 +42,12 @@ BOARD_H = ROWS * CELL
 WIN_W   = BOARD_W * 2 + PADDING * 4 + GAP
 WIN_H   = BOARD_H + PADDING * 2 + HUD_H
 
-BTN_COLOR        = (210, 208, 200)
-BTN_HOVER_COLOR  = (190, 188, 180)
-BTN_BORDER_COLOR = (160, 158, 150)
+# HUD button layout — buttons are right-aligned from the AI board's right edge
+_BTN_H = 26
+_BTN_Y = (HUD_H - _BTN_H) // 2
+
+# Pre-calculate right edge of AI board
+_AI_BOARD_RIGHT = PADDING * 3 + BOARD_W + GAP + BOARD_W  # = WIN_W - PADDING
 
 
 def mask_fn(env):
@@ -49,7 +56,7 @@ def mask_fn(env):
 
 class FruitBoxVs:
     def __init__(self, opponent="solver", screen=None, grid_type="random"):
-        self.opponent  = opponent  # "solver" or "rl_model"
+        self.opponent  = opponent
         self.grid_type = grid_type
 
         if screen is None:
@@ -58,7 +65,7 @@ class FruitBoxVs:
         else:
             self.screen = screen
         pygame.display.set_caption(f"Fruit Box — vs {'Solver' if opponent == 'solver' else 'RL Model'}")
-        self.clock  = pygame.time.Clock()
+        self.clock = pygame.time.Clock()
 
         self.font_num   = pygame.font.SysFont("Arial", 20, bold=True)
         self.font_score = pygame.font.SysFont("Arial", 23, bold=True)
@@ -66,13 +73,12 @@ class FruitBoxVs:
         self.font_over  = pygame.font.SysFont("Arial", 38, bold=True)
         self.font_sub   = pygame.font.SysFont("Arial", 20)
         self.font_btn   = pygame.font.SysFont("Arial", 13, bold=True)
-        self.font_sym   = pygame.font.SysFont("Segoe UI Symbol", 14)
 
         self.human_game = FruitBoxGame(grid_type=grid_type)
         self.ai_game    = FruitBoxGame(grid_type=grid_type)
 
         if opponent == "rl_model":
-            self.ai_env = ActionMasker(FruitBoxEnv(), mask_fn)
+            self.ai_env  = ActionMasker(FruitBoxEnv(), mask_fn)
             self.ai_game = self.ai_env.env.game
             self.model   = MaskablePPO.load(MODEL_PATH)
         else:
@@ -81,15 +87,49 @@ class FruitBoxVs:
 
         self.overlay          = pygame.Surface((WIN_W, WIN_H), pygame.SRCALPHA)
         self.ai_board_visible = False
-        self.toggle_btn_rect  = pygame.Rect(0, 0, 0, 0)
-        self.pause_btn_rect   = pygame.Rect(0, 0, 0, 0)
-        self.menu_btn_rect    = pygame.Rect(0, 0, 0, 0)
-        self.restart_btn_rect = pygame.Rect(0, 0, 0, 0)
         self.close_over_rect  = pygame.Rect(0, 0, 0, 0)
         self.stats            = fruitbox_stats.get_vs_stats()
+
+        # ── pygame_gui ────────────────────────────────────────────
+        self.ui = pygame_gui.UIManager((WIN_W, WIN_H), _THEME)
+
+        # Buttons placed right-to-left from AI board right edge
+        rx = _AI_BOARD_RIGHT - PADDING
+
+        # Show/Hide toggle (rightmost)
+        self.toggle_btn = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect(rx - 60, _BTN_Y, 60, _BTN_H),
+            text="Show",
+            manager=self.ui,
+        )
+        rx -= 60 + 8
+
+        # Pause
+        self.pause_btn = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect(rx - 34, _BTN_Y, 34, _BTN_H),
+            text="⏸",
+            manager=self.ui,
+        )
+        rx -= 34 + 8
+
+        # Menu
+        self.menu_btn = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect(rx - 56, _BTN_Y, 56, _BTN_H),
+            text="Menu",
+            manager=self.ui,
+        )
+        rx -= 56 + 8
+
+        # Restart
+        self.restart_btn = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect(rx - 70, _BTN_Y, 70, _BTN_H),
+            text="Restart",
+            manager=self.ui,
+        )
+
         self.reset()
 
-    # ── board x offsets ───────────────────────────────────────────────
+    # ── board x offsets ───────────────────────────────────────────
 
     def _human_x(self):
         return PADDING
@@ -97,7 +137,7 @@ class FruitBoxVs:
     def _ai_x(self):
         return PADDING * 3 + BOARD_W + GAP
 
-    # ── geometry ──────────────────────────────────────────────────────
+    # ── geometry ──────────────────────────────────────────────────
 
     def _cell_rect(self, row, col, board_x):
         return pygame.Rect(
@@ -122,7 +162,7 @@ class FruitBoxVs:
         c2 = max(self.drag_start[1], self.drag_end[1])
         return r1, c1, r2, c2
 
-    # ── drawing ───────────────────────────────────────────────────────
+    # ── drawing ───────────────────────────────────────────────────
 
     def _draw_board(self, game, board_x, drag_start=None, drag_end=None):
         for row in range(ROWS):
@@ -130,10 +170,8 @@ class FruitBoxVs:
                 rect    = self._cell_rect(row, col, board_x)
                 val     = game.grid[row][col]
                 cleared = val == -1
-
                 pygame.draw.rect(self.screen, CLEARED_BG if cleared else CELL_BG, rect, border_radius=5)
                 pygame.draw.rect(self.screen, CELL_BORDER, rect, width=1, border_radius=5)
-
                 if not cleared:
                     surf = self.font_num.render(str(val), True, TEXT_PRIMARY)
                     self.screen.blit(surf, (
@@ -146,12 +184,10 @@ class FruitBoxVs:
             c1 = min(drag_start[1], drag_end[1])
             r2 = max(drag_start[0], drag_end[0])
             c2 = max(drag_start[1], drag_end[1])
-
             valid = game.validate_move(r1, c1, r2, c2)
-            tl = self._cell_rect(r1, c1, board_x)
-            br = self._cell_rect(r2, c2, board_x)
+            tl  = self._cell_rect(r1, c1, board_x)
+            br  = self._cell_rect(r2, c2, board_x)
             sel = pygame.Rect(tl.x, tl.y, br.right - tl.x, br.bottom - tl.y)
-
             self.overlay.fill((0, 0, 0, 0))
             pygame.draw.rect(self.overlay, VALID_FILL if valid else SEL_FILL, sel, border_radius=8)
             self.screen.blit(self.overlay, (0, 0))
@@ -175,54 +211,13 @@ class FruitBoxVs:
         self.screen.blit(self.font_label.render("TIME", True, TEXT_SECONDARY), (tx, 12))
         self.screen.blit(timer_surf, (tx, 28))
 
-        btn_label = "Hide" if self.ai_board_visible else "Show"
-        btn_surf  = self.font_btn.render(btn_label, True, TEXT_PRIMARY)
-        btn_pad_x, btn_pad_y = 10, 5
-        btn_w = btn_surf.get_width()  + btn_pad_x * 2
-        btn_h = btn_surf.get_height() + btn_pad_y * 2
-        btn_x = self._ai_x() + BOARD_W - btn_w
-        btn_y = (HUD_H - btn_h) // 2
-
-        self.toggle_btn_rect = pygame.Rect(btn_x, btn_y, btn_w, btn_h)
-        hovered = self.toggle_btn_rect.collidepoint(pygame.mouse.get_pos())
-        pygame.draw.rect(self.screen, BTN_HOVER_COLOR if hovered else BTN_COLOR, self.toggle_btn_rect, border_radius=5)
-        pygame.draw.rect(self.screen, BTN_BORDER_COLOR, self.toggle_btn_rect, width=1, border_radius=5)
-        self.screen.blit(btn_surf, (btn_x + btn_pad_x, btn_y + btn_pad_y))
-
-        mouse = pygame.mouse.get_pos()
-
-        pause_surf = self.font_sym.render("▶" if self.human_game.paused else "⏸", True, TEXT_PRIMARY)
-        p_w = pause_surf.get_width() + btn_pad_x * 2
-        p_h = pause_surf.get_height() + btn_pad_y * 2
-        p_x = btn_x - p_w - 8
-        p_y = (HUD_H - p_h) // 2
-        self.pause_btn_rect = pygame.Rect(p_x, p_y, p_w, p_h)
-        p_hovered = self.pause_btn_rect.collidepoint(mouse)
-        pygame.draw.rect(self.screen, BTN_HOVER_COLOR if p_hovered else BTN_COLOR, self.pause_btn_rect, border_radius=5)
-        pygame.draw.rect(self.screen, BTN_BORDER_COLOR, self.pause_btn_rect, width=1, border_radius=5)
-        self.screen.blit(pause_surf, (p_x + btn_pad_x, p_y + btn_pad_y))
-
-        menu_surf = self.font_btn.render("Menu", True, TEXT_PRIMARY)
-        m_w = menu_surf.get_width() + btn_pad_x * 2
-        m_h = menu_surf.get_height() + btn_pad_y * 2
-        m_x = p_x - m_w - 8
-        m_y = (HUD_H - m_h) // 2
-        self.menu_btn_rect = pygame.Rect(m_x, m_y, m_w, m_h)
-        m_hovered = self.menu_btn_rect.collidepoint(mouse)
-        pygame.draw.rect(self.screen, BTN_HOVER_COLOR if m_hovered else BTN_COLOR, self.menu_btn_rect, border_radius=5)
-        pygame.draw.rect(self.screen, BTN_BORDER_COLOR, self.menu_btn_rect, width=1, border_radius=5)
-        self.screen.blit(menu_surf, (m_x + btn_pad_x, m_y + btn_pad_y))
-
-        restart_surf = self.font_btn.render("Restart", True, TEXT_PRIMARY)
-        r_w = restart_surf.get_width() + btn_pad_x * 2
-        r_h = restart_surf.get_height() + btn_pad_y * 2
-        r_x = m_x - r_w - 8
-        r_y = (HUD_H - r_h) // 2
-        self.restart_btn_rect = pygame.Rect(r_x, r_y, r_w, r_h)
-        r_hovered = self.restart_btn_rect.collidepoint(mouse)
-        pygame.draw.rect(self.screen, BTN_HOVER_COLOR if r_hovered else BTN_COLOR, self.restart_btn_rect, border_radius=5)
-        pygame.draw.rect(self.screen, BTN_BORDER_COLOR, self.restart_btn_rect, width=1, border_radius=5)
-        self.screen.blit(restart_surf, (r_x + btn_pad_x, r_y + btn_pad_y))
+        # Update dynamic button labels
+        new_pause_text  = "▶" if self.human_game.paused else "⏸"
+        new_toggle_text = "Hide" if self.ai_board_visible else "Show"
+        if self.pause_btn.text  != new_pause_text:
+            self.pause_btn.set_text(new_pause_text)
+        if self.toggle_btn.text != new_toggle_text:
+            self.toggle_btn.set_text(new_toggle_text)
 
     def _draw_paused(self):
         grid_rect = pygame.Rect(self._human_x(), HUD_H + PADDING, BOARD_W, BOARD_H)
@@ -272,12 +267,11 @@ class FruitBoxVs:
         x_w    = x_surf.get_width()  + x_pad * 2
         x_h    = x_surf.get_height() + x_pad * 2
         self.close_over_rect = pygame.Rect(cx + card_w - x_w - 8, cy + 8, x_w, x_h)
-        x_hov = self.close_over_rect.collidepoint(pygame.mouse.get_pos())
-        if x_hov:
+        if self.close_over_rect.collidepoint(pygame.mouse.get_pos()):
             pygame.draw.rect(self.screen, (230, 228, 222), self.close_over_rect, border_radius=5)
         self.screen.blit(x_surf, (self.close_over_rect.x + x_pad, self.close_over_rect.y + x_pad))
 
-    # ── AI logic ──────────────────────────────────────────────────────
+    # ── AI logic ──────────────────────────────────────────────────
 
     def _run_solver(self, grid):
         solver_grid = [[0 if v == -1 else v for v in row] for row in grid]
@@ -299,8 +293,7 @@ class FruitBoxVs:
             _, no_moves = self.ai_game.apply_move(r0, c0, r1, c1)
             if no_moves:
                 self.ai_over = True
-
-        else:  # rl_model
+        else:
             obs   = self.ai_env.env._obs()
             masks = self.ai_env.env.action_masks()
             action, _ = self.model.predict(obs, action_masks=masks, deterministic=True)
@@ -312,7 +305,7 @@ class FruitBoxVs:
             if no_moves:
                 self.ai_over = True
 
-    # ── state ─────────────────────────────────────────────────────────
+    # ── state ─────────────────────────────────────────────────────
 
     def reset(self):
         self.human_game.reset()
@@ -332,16 +325,16 @@ class FruitBoxVs:
         self.ai_sel_clear_at = 0
         self.last_ai_move    = time.time() + AI_INTERVAL
 
-        self.human_over         = False
-        self.ai_over            = False
-        self.game_over          = False
-        self.over_reason        = ""
-        self.show_game_over     = True
-        self._result_recorded   = False
-        self._game_start        = time.time()
+        self.human_over       = False
+        self.ai_over          = False
+        self.game_over        = False
+        self.over_reason      = ""
+        self.show_game_over   = True
+        self._result_recorded = False
+        self._game_start      = time.time()
 
         self._solver_moves = []
-        self._solver_ready = self.opponent != "solver"  # rl_model needs no solver
+        self._solver_ready = self.opponent != "solver"
         if self.opponent == "solver":
             threading.Thread(
                 target=self._run_solver,
@@ -349,10 +342,12 @@ class FruitBoxVs:
                 daemon=True,
             ).start()
 
-    # ── main loop ─────────────────────────────────────────────────────
+        self.pause_btn.enable()
+
+    # ── main loop ─────────────────────────────────────────────────
 
     def run(self):
-        self.clock.tick()  # discard time accumulated during model loading
+        self.clock.tick()
         while True:
             dt = self.clock.tick(FPS) / 1000.0
 
@@ -360,6 +355,19 @@ class FruitBoxVs:
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     sys.exit()
+
+                if event.type == pygame_gui.UI_BUTTON_PRESSED:
+                    if event.ui_element == self.menu_btn:
+                        return
+                    if event.ui_element == self.restart_btn:
+                        self.reset()
+                    if event.ui_element == self.toggle_btn:
+                        self.ai_board_visible = not self.ai_board_visible
+                    if event.ui_element == self.pause_btn and not self.game_over:
+                        self.human_game.toggle_pause()
+                        self.drag_start = self.drag_end = None
+                        if not self.human_game.paused:
+                            self.last_ai_move = time.time() + AI_INTERVAL
 
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE:
@@ -370,26 +378,11 @@ class FruitBoxVs:
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     if self.game_over and self.show_game_over and self.close_over_rect.collidepoint(event.pos):
                         self.show_game_over = False
-                        continue
-                    if self.menu_btn_rect.collidepoint(event.pos):
-                        return
-                    if self.restart_btn_rect.collidepoint(event.pos):
-                        self.reset()
-                        continue
-                    if self.toggle_btn_rect.collidepoint(event.pos):
-                        self.ai_board_visible = not self.ai_board_visible
-                        continue
-                    if self.pause_btn_rect.collidepoint(event.pos):
-                        self.human_game.toggle_pause()
-                        self.drag_start = self.drag_end = None
-                        if not self.human_game.paused:
-                            self.last_ai_move = time.time() + AI_INTERVAL
-                        continue
-
-                    if self.game_over or (not self.human_over and not self.human_game.paused):
-                        cell = self._pixel_to_cell(*event.pos)
-                        if cell:
-                            self.drag_start = self.drag_end = cell
+                    else:
+                        if self.game_over or (not self.human_over and not self.human_game.paused):
+                            cell = self._pixel_to_cell(*event.pos)
+                            if cell:
+                                self.drag_start = self.drag_end = cell
 
                 if event.type == pygame.MOUSEMOTION and self.drag_start:
                     if self.game_over or (not self.human_over and not self.human_game.paused):
@@ -406,6 +399,8 @@ class FruitBoxVs:
                                 self.human_over = True
                     self.drag_start = self.drag_end = None
 
+                self.ui.process_events(event)
+
             if not self.game_over:
                 timed_out = self.human_game.tick(dt)
                 if not self.human_game.paused:
@@ -413,12 +408,13 @@ class FruitBoxVs:
 
                 if timed_out:
                     self.human_over = self.ai_over = True
-                    self.game_over = True
+                    self.game_over  = True
                     h, a = self.human_game.score, self.ai_game.score
                     opp  = "Solver" if self.opponent == "solver" else "RL Model"
                     if   h > a: self.over_reason = f"You win!  {h} – {a}"
                     elif a > h: self.over_reason = f"{opp} wins!  {h} – {a}"
                     else:       self.over_reason = f"Tie!  {h} – {a}"
+                    self.pause_btn.disable()
                     if not self._result_recorded:
                         fruitbox_stats.record(fruitbox_stats.GameInfo(
                             gamemode="vs_ai",
@@ -432,7 +428,6 @@ class FruitBoxVs:
                         self._result_recorded = True
 
                 now = time.time()
-
                 if not self.ai_over and not self.human_game.paused and now >= self.last_ai_move:
                     self.last_ai_move = now + AI_INTERVAL
                     self._step_ai()
@@ -454,18 +449,17 @@ class FruitBoxVs:
                 ai_cover = pygame.Rect(self._ai_x(), HUD_H + PADDING, BOARD_W, BOARD_H)
                 pygame.draw.rect(self.screen, (0, 0, 0), ai_cover)
 
+            self.ui.update(dt)
+            self.ui.draw_ui(self.screen)
+
             if self.game_over and self.show_game_over:
                 self._draw_game_over()
+
             pygame.display.flip()
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--opponent",
-        choices=["solver", "rl_model"],
-        default="solver",
-        help="Which AI opponent to play against (default: solver)",
-    )
+    parser.add_argument("--opponent", choices=["solver", "rl_model"], default="solver")
     args = parser.parse_args()
     FruitBoxVs(opponent=args.opponent).run()

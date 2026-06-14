@@ -2,6 +2,7 @@
 gymnasium
 numpy
 pygame
+pygame_gui
 sb3-contrib
 stable-baselines3
 torch

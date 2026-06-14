@@ -1,5 +1,6 @@
 import sys
 import pygame
+import pygame_gui
 
 from fruitbox_game import FruitBoxGame
 from fruitbox_settings import SettingsOverlay
@@ -7,19 +8,26 @@ from fruitbox_stats_screen import StatsOverlay
 from fruitbox_pygame import (
     FruitBoxPygame,
     WIN_W as GAME_W, WIN_H as GAME_H,
-    BG, TEXT_PRIMARY, TEXT_SECONDARY, CELL_BORDER,
+    BG, TEXT_PRIMARY, TEXT_SECONDARY,
+    _THEME,
 )
 
 MENU_W = GAME_W
 MENU_H = GAME_H
 
-ACCENT        = (24,  95, 165)
-CARD_BG       = (255, 255, 255)
-CARD_HOVER_BG = (240, 246, 255)
-ARROW_COLOR   = (220, 130, 50)
-ARROW_HOVER   = (180,  90, 20)
+ACCENT       = (24,  95, 165)
+ARROW_COLOR  = (220, 130, 50)
+ARROW_HOVER  = (180,  90, 20)
 
 GRID_TYPES = ["random", "solvable"]
+
+# card button dimensions (Single Player / vs AI)
+_CARD_W = 280
+_CARD_H = 80
+_CARD_Y = 240
+
+# top-right buttons
+_TOP_BTN_Y = 14
 
 
 class FruitBoxMenu:
@@ -27,32 +35,76 @@ class FruitBoxMenu:
         pygame.init()
         self.screen = pygame.display.set_mode((MENU_W, MENU_H))
         pygame.display.set_caption("Fruit Box")
-        self.clock        = pygame.time.Clock()
-        self.font_title   = pygame.font.SysFont("Arial", 52, bold=True)
-        self.font_btn     = pygame.font.SysFont("Arial", 21, bold=True)
-        self.font_hint    = pygame.font.SysFont("Arial", 12)
-        self.font_toggle  = pygame.font.SysFont("Arial", 15, bold=True)
-        self.font_arrow   = pygame.font.SysFont("Arial", 22, bold=True)
-        self.font_label   = pygame.font.SysFont("Arial", 15)
+        self.clock       = pygame.time.Clock()
+        self.font_title  = pygame.font.SysFont("Arial", 52, bold=True)
+        self.font_hint   = pygame.font.SysFont("Arial", 12)
+        self.font_toggle = pygame.font.SysFont("Arial", 15, bold=True)
+        self.font_arrow  = pygame.font.SysFont("Arial", 22, bold=True)
+        self.font_label  = pygame.font.SysFont("Arial", 15)
+        self.font_btn    = pygame.font.SysFont("Arial", 13)
 
         self.grid_type_idx    = 0
-        self.sp_btn_rect      = pygame.Rect(0, 0, 0, 0)
-        self.vs_btn_rect      = pygame.Rect(0, 0, 0, 0)
         self.left_arrow_rect  = pygame.Rect(0, 0, 0, 0)
         self.right_arrow_rect = pygame.Rect(0, 0, 0, 0)
-        self.settings          = SettingsOverlay()
-        self.settings_btn_rect = pygame.Rect(0, 0, 0, 0)
-        self.stats_overlay     = StatsOverlay()
-        self.stats_btn_rect    = pygame.Rect(0, 0, 0, 0)
-        self.watch_btn_rect    = pygame.Rect(MENU_W - 60, MENU_H - 30, 60, 30)
+
+        self.settings       = SettingsOverlay()
+        self.stats_overlay  = StatsOverlay()
+
+        # ── pygame_gui ────────────────────────────────────────────
+        self.ui = pygame_gui.UIManager((MENU_W, MENU_H), _THEME)
+
+        # Mode card buttons (side by side, centred)
+        card_gap = 24
+        cards_x  = (MENU_W - _CARD_W * 2 - card_gap) // 2
+
+        self.sp_btn = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect(cards_x, _CARD_Y, _CARD_W, _CARD_H),
+            text="Single Player",
+            manager=self.ui,
+            object_id="#card_btn",
+        )
+        self.vs_btn = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect(cards_x + _CARD_W + card_gap, _CARD_Y, _CARD_W, _CARD_H),
+            text="vs AI",
+            manager=self.ui,
+            object_id="#card_btn",
+        )
+
+        # Top-right buttons  (Settings, then Stats to its left)
+        btn_pad_x, btn_pad_y = 10, 5
+        s_surf  = self.font_btn.render("Settings", True, TEXT_SECONDARY)
+        s_w     = s_surf.get_width()  + btn_pad_x * 2
+        s_h     = s_surf.get_height() + btn_pad_y * 2
+        s_x     = MENU_W - s_w - 14
+
+        st_surf = self.font_btn.render("Stats", True, TEXT_SECONDARY)
+        st_w    = st_surf.get_width()  + btn_pad_x * 2
+        st_h    = st_surf.get_height() + btn_pad_y * 2
+        st_x    = s_x - st_w - 8
+
+        self.settings_btn = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect(s_x, _TOP_BTN_Y, s_w, s_h),
+            text="Settings",
+            manager=self.ui,
+            object_id="#top_btn",
+        )
+        self.stats_btn = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect(st_x, _TOP_BTN_Y, st_w, st_h),
+            text="Stats",
+            manager=self.ui,
+            object_id="#top_btn",
+        )
+
+        # Hidden watch-AI button (bottom-right corner, small)
+        self.watch_btn_rect = pygame.Rect(MENU_W - 60, MENU_H - 30, 60, 30)
 
     @property
     def grid_type(self):
         return GRID_TYPES[self.grid_type_idx]
 
-    # ── drawing ───────────────────────────────────────────────────────
+    # ── drawing ───────────────────────────────────────────────────
 
-    def _draw(self):
+    def _draw(self, dt):
         self.screen.fill(BG)
         mouse = pygame.mouse.get_pos()
 
@@ -60,40 +112,19 @@ class FruitBoxMenu:
         title = self.font_title.render("Fruit Box", True, TEXT_PRIMARY)
         self.screen.blit(title, ((MENU_W - title.get_width()) // 2, 100))
 
-        # mode cards (side by side)
-        card_w = 280
-        card_h = 80
-        card_gap = 24
-        card_y = 240
-        cards_x = (MENU_W - card_w * 2 - card_gap) // 2
-
-        self.sp_btn_rect = pygame.Rect(cards_x,                   card_y, card_w, card_h)
-        self.vs_btn_rect = pygame.Rect(cards_x + card_w + card_gap, card_y, card_w, card_h)
-
-        for rect, label in [(self.sp_btn_rect, "Single Player"), (self.vs_btn_rect, "vs AI")]:
-            hovered = rect.collidepoint(mouse)
-            pygame.draw.rect(self.screen, CARD_HOVER_BG if hovered else CARD_BG, rect, border_radius=12)
-            pygame.draw.rect(self.screen, ACCENT if hovered else CELL_BORDER, rect,
-                             width=2 if hovered else 1, border_radius=12)
-            surf = self.font_btn.render(label, True, TEXT_PRIMARY)
-            self.screen.blit(surf, (
-                rect.x + (card_w - surf.get_width())  // 2,
-                rect.y + (card_h - surf.get_height()) // 2,
-            ))
-
         # grid type selector
-        gt_cy = card_y + card_h + 60
+        gt_cy = _CARD_Y + _CARD_H + 60
 
-        label_surf = self.font_btn.render("Grid Type", True, TEXT_SECONDARY)
-        pill_surf  = self.font_btn.render(self.grid_type.capitalize(), True, ACCENT)
+        label_surf = self.font_toggle.render("Grid Type", True, TEXT_SECONDARY)
+        pill_surf  = self.font_toggle.render(self.grid_type.capitalize(), True, ACCENT)
         pill_pad_x, pill_pad_y = 20, 8
         pill_w = max(pill_surf.get_width() + pill_pad_x * 2, 140)
         pill_h = pill_surf.get_height() + pill_pad_y * 2
 
-        arr_l      = self.font_arrow.render("<", True, ARROW_COLOR)
-        arr_r      = self.font_arrow.render(">", True, ARROW_COLOR)
+        arr_l       = self.font_arrow.render("<", True, ARROW_COLOR)
+        arr_r       = self.font_arrow.render(">", True, ARROW_COLOR)
         arr_click_w = arr_l.get_width() + 24
-        spacing    = 18
+        spacing     = 18
 
         total_w = (label_surf.get_width() + spacing +
                    arr_click_w + spacing +
@@ -101,11 +132,9 @@ class FruitBoxMenu:
                    arr_click_w)
         row_x = (MENU_W - total_w) // 2
 
-        # "Grid Type" label
         self.screen.blit(label_surf, (row_x, gt_cy - label_surf.get_height() // 2))
         x = row_x + label_surf.get_width() + spacing
 
-        # left arrow
         self.left_arrow_rect = pygame.Rect(x, gt_cy - pill_h // 2, arr_click_w, pill_h)
         l_hov = self.left_arrow_rect.collidepoint(mouse)
         self.screen.blit(
@@ -114,7 +143,6 @@ class FruitBoxMenu:
         )
         x += arr_click_w + spacing
 
-        # pill
         pill_rect = pygame.Rect(x, gt_cy - pill_h // 2, pill_w, pill_h)
         pygame.draw.rect(self.screen, (220, 235, 255), pill_rect, border_radius=20)
         pygame.draw.rect(self.screen, ACCENT, pill_rect, width=2, border_radius=20)
@@ -124,7 +152,6 @@ class FruitBoxMenu:
         ))
         x += pill_w + spacing
 
-        # right arrow
         self.right_arrow_rect = pygame.Rect(x, gt_cy - pill_h // 2, arr_click_w, pill_h)
         r_hov = self.right_arrow_rect.collidepoint(mouse)
         self.screen.blit(
@@ -132,73 +159,61 @@ class FruitBoxMenu:
             (x + 12, gt_cy - arr_r.get_height() // 2),
         )
 
-        # hint
+        # bottom hint
         hint = self.font_hint.render("Press ESC during a game to return here", True, TEXT_SECONDARY)
         self.screen.blit(hint, ((MENU_W - hint.get_width()) // 2, MENU_H - 26))
 
-        # top-right buttons (Settings + Stats)
-        btn_pad_x, btn_pad_y = 10, 5
-        btn_y = 14
+        self.ui.update(dt)
+        self.ui.draw_ui(self.screen)
 
-        s_surf = self.font_hint.render("Settings", True, TEXT_SECONDARY)
-        s_w = s_surf.get_width()  + btn_pad_x * 2
-        s_h = s_surf.get_height() + btn_pad_y * 2
-        s_x = MENU_W - s_w - 14
-        self.settings_btn_rect = pygame.Rect(s_x, btn_y, s_w, s_h)
-        s_hov = self.settings_btn_rect.collidepoint(mouse)
-        pygame.draw.rect(self.screen, (190, 188, 180) if s_hov else (210, 208, 200), self.settings_btn_rect, border_radius=5)
-        pygame.draw.rect(self.screen, (160, 158, 150), self.settings_btn_rect, width=1, border_radius=5)
-        self.screen.blit(s_surf, (s_x + btn_pad_x, btn_y + btn_pad_y))
-
-        st_surf = self.font_hint.render("Stats", True, TEXT_SECONDARY)
-        st_w = st_surf.get_width()  + btn_pad_x * 2
-        st_h = st_surf.get_height() + btn_pad_y * 2
-        st_x = s_x - st_w - 8
-        self.stats_btn_rect = pygame.Rect(st_x, btn_y, st_w, st_h)
-        st_hov = self.stats_btn_rect.collidepoint(mouse)
-        pygame.draw.rect(self.screen, (190, 188, 180) if st_hov else (210, 208, 200), self.stats_btn_rect, border_radius=5)
-        pygame.draw.rect(self.screen, (160, 158, 150), self.stats_btn_rect, width=1, border_radius=5)
-        self.screen.blit(st_surf, (st_x + btn_pad_x, btn_y + btn_pad_y))
-
+        # Overlays drawn after ui.draw_ui so they appear on top of the card buttons
         self.settings.draw(self.screen)
         self.stats_overlay.draw(self.screen)
+
         pygame.display.flip()
 
-    # ── menu loop ─────────────────────────────────────────────────────
+    # ── menu loop ─────────────────────────────────────────────────
 
     def _menu_loop(self):
         while True:
-            self.clock.tick(60)
+            dt = self.clock.tick(60) / 1000.0
+
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     sys.exit()
+
+                # Overlays consume events when visible
                 if self.settings.handle_event(event):
+                    self.ui.process_events(event)
                     continue
                 if self.stats_overlay.handle_event(event):
+                    self.ui.process_events(event)
                     continue
-                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    if self.settings_btn_rect.collidepoint(event.pos):
+
+                if event.type == pygame_gui.UI_BUTTON_PRESSED:
+                    if event.ui_element == self.sp_btn:
+                        return "single_player"
+                    if event.ui_element == self.vs_btn:
+                        return "vs_ai"
+                    if event.ui_element == self.settings_btn:
                         self.settings.toggle()
-                        continue
-                    if self.stats_btn_rect.collidepoint(event.pos):
+                    if event.ui_element == self.stats_btn:
                         self.stats_overlay.toggle()
-                        continue
+
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     if self.left_arrow_rect.collidepoint(event.pos):
                         self.grid_type_idx = (self.grid_type_idx - 1) % len(GRID_TYPES)
-                        continue
-                    if self.right_arrow_rect.collidepoint(event.pos):
+                    elif self.right_arrow_rect.collidepoint(event.pos):
                         self.grid_type_idx = (self.grid_type_idx + 1) % len(GRID_TYPES)
-                        continue
-                    if self.sp_btn_rect.collidepoint(event.pos):
-                        return "single_player"
-                    if self.vs_btn_rect.collidepoint(event.pos):
-                        return "vs_ai"
-                    if self.watch_btn_rect.collidepoint(event.pos):
+                    elif self.watch_btn_rect.collidepoint(event.pos):
                         return "watch_ai"
-            self._draw()
 
-    # ── launchers ─────────────────────────────────────────────────────
+                self.ui.process_events(event)
+
+            self._draw(dt)
+
+    # ── launchers ─────────────────────────────────────────────────
 
     def _launch(self, mode):
         if mode == "single_player":
@@ -209,8 +224,8 @@ class FruitBoxMenu:
             self.screen = pygame.display.set_mode((MENU_W, MENU_H))
 
         elif mode == "vs_ai":
-            # Show loading on the current menu screen immediately (before any heavy imports)
-            loading_surf = self.font_btn.render("Loading model…", True, TEXT_SECONDARY)
+            loading_surf = pygame.font.SysFont("Arial", 21, bold=True).render(
+                "Loading model…", True, TEXT_SECONDARY)
             self.screen.fill(BG)
             self.screen.blit(loading_surf, (
                 (MENU_W - loading_surf.get_width())  // 2,
@@ -230,7 +245,8 @@ class FruitBoxMenu:
             self.screen = pygame.display.set_mode((MENU_W, MENU_H))
 
         elif mode == "watch_ai":
-            loading_surf = self.font_btn.render("Loading model…", True, TEXT_SECONDARY)
+            loading_surf = pygame.font.SysFont("Arial", 21, bold=True).render(
+                "Loading model…", True, TEXT_SECONDARY)
             self.screen.fill(BG)
             self.screen.blit(loading_surf, (
                 (MENU_W - loading_surf.get_width())  // 2,
@@ -249,7 +265,7 @@ class FruitBoxMenu:
             FruitBoxAiWatch(screen=screen, grid_type=self.grid_type).run()
             self.screen = pygame.display.set_mode((MENU_W, MENU_H))
 
-    # ── main ──────────────────────────────────────────────────────────
+    # ── main ──────────────────────────────────────────────────────
 
     def run(self):
         while True:
