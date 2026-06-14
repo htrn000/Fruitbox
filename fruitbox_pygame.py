@@ -94,8 +94,9 @@ class FruitBoxPygame:
         self.over_reason      = ""
         self._game_start      = time.time()
         self._result_recorded = False
-        self.show_game_over   = True
-        self.close_over_rect  = pygame.Rect(0, 0, 0, 0)
+        self.show_game_over       = True
+        self.close_over_rect      = pygame.Rect(0, 0, 0, 0)
+        self._game_over_card_rect = pygame.Rect(0, 0, 0, 0)
 
         self.overlay = pygame.Surface((WIN_W, WIN_H), pygame.SRCALPHA)
 
@@ -220,6 +221,7 @@ class FruitBoxPygame:
         card_x = (WIN_W - card_w) // 2
         card_y = (WIN_H - card_h) // 2
         card   = pygame.Rect(card_x, card_y, card_w, card_h)
+        self._game_over_card_rect = card
         draw_rounded_rect(self.screen, (255, 255, 255), card, radius=14)
         draw_rounded_rect_border(self.screen, CELL_BORDER, card, width=1, radius=14)
 
@@ -284,8 +286,11 @@ class FruitBoxPygame:
                         self.restart()
 
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    if self.game_over and self.show_game_over and self.close_over_rect.collidepoint(event.pos):
-                        self.show_game_over = False
+                    if self.game_over and self.show_game_over:
+                        if not self._game_over_card_rect.collidepoint(event.pos):
+                            self.show_game_over = False
+                        elif self.close_over_rect.collidepoint(event.pos):
+                            self.show_game_over = False
                     else:
                         if self.game_over or not self.game.paused:
                             cell = self.pixel_to_cell(*event.pos)
