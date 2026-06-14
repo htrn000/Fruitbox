@@ -4,6 +4,7 @@ import time
 import math
 
 import pygame
+import pygame_gui
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.wrappers import ActionMasker
 
@@ -13,9 +14,13 @@ from fruitbox_pygame import (
     BG, CELL_BG, CELL_BORDER, CLEARED_BG,
     TEXT_PRIMARY, TEXT_SECONDARY,
     TIMER_OK, TIMER_WARN, TIMER_DANGER,
-    BTN_COLOR, BTN_HOVER_COLOR, BTN_BORDER_COLOR,
     VALID_FILL, VALID_BOR,
+    _THEME,
 )
+
+_BTN_H = 26
+_BTN_Y = (HUD_H - _BTN_H) // 2
+_BTN_X0 = PADDING + 90
 
 
 def _resource(rel):
@@ -52,23 +57,38 @@ class FruitBoxAiWatch:
         self.game   = self.ai_env.env.game
         self.model  = MaskablePPO.load(MODEL_PATH)
 
-        self.overlay          = pygame.Surface((WIN_W, WIN_H), pygame.SRCALPHA)
-        self.menu_btn_rect    = pygame.Rect(0, 0, 0, 0)
-        self.restart_btn_rect = pygame.Rect(0, 0, 0, 0)
-        self.close_over_rect  = pygame.Rect(0, 0, 0, 0)
+        self.overlay         = pygame.Surface((WIN_W, WIN_H), pygame.SRCALPHA)
+        self.close_over_rect = pygame.Rect(0, 0, 0, 0)
+
+        # ── pygame_gui ────────────────────────────────────────────
+        self.ui = pygame_gui.UIManager((WIN_W, WIN_H), _THEME)
+
+        bx = _BTN_X0
+        self.menu_btn = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect(bx, _BTN_Y, 56, _BTN_H),
+            text="Menu",
+            manager=self.ui,
+        )
+        bx += 56 + 8
+        self.restart_btn = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect(bx, _BTN_Y, 70, _BTN_H),
+            text="Restart",
+            manager=self.ui,
+        )
+
         self.reset()
 
     def reset(self):
         self.ai_env.reset()
-        self.game_over        = False
-        self.game_over_at     = None
-        self.show_game_over   = True
-        self.last_ai_move     = time.time() + AI_INTERVAL
-        self.sel_start        = None
-        self.sel_end          = None
-        self.sel_clear_at     = 0
+        self.game_over      = False
+        self.game_over_at   = None
+        self.show_game_over = True
+        self.last_ai_move   = time.time() + AI_INTERVAL
+        self.sel_start      = None
+        self.sel_end        = None
+        self.sel_clear_at   = 0
 
-    # ── drawing ───────────────────────────────────────────────────────
+    # ── drawing ───────────────────────────────────────────────────
 
     def _cell_rect(self, row, col):
         return pygame.Rect(
@@ -94,30 +114,6 @@ class FruitBoxAiWatch:
         fill_w = int(bar_w * (t / self.game.time_limit))
         pygame.draw.rect(self.screen, CELL_BORDER, (bar_x, bar_y, bar_w, bar_h), border_radius=3)
         pygame.draw.rect(self.screen, tcol, (bar_x, bar_y, fill_w, bar_h), border_radius=3)
-
-        mouse = pygame.mouse.get_pos()
-        btn_pad_x, btn_pad_y = 10, 5
-        m_surf = self.font_btn.render("Menu", True, TEXT_PRIMARY)
-        m_w    = m_surf.get_width()  + btn_pad_x * 2
-        m_h    = m_surf.get_height() + btn_pad_y * 2
-        m_x    = PADDING + 90
-        m_y    = (HUD_H - m_h) // 2
-        self.menu_btn_rect = pygame.Rect(m_x, m_y, m_w, m_h)
-        m_hov  = self.menu_btn_rect.collidepoint(mouse)
-        pygame.draw.rect(self.screen, BTN_HOVER_COLOR if m_hov else BTN_COLOR, self.menu_btn_rect, border_radius=5)
-        pygame.draw.rect(self.screen, BTN_BORDER_COLOR, self.menu_btn_rect, width=1, border_radius=5)
-        self.screen.blit(m_surf, (m_x + btn_pad_x, m_y + btn_pad_y))
-
-        r_surf = self.font_btn.render("Restart", True, TEXT_PRIMARY)
-        r_w    = r_surf.get_width()  + btn_pad_x * 2
-        r_h    = r_surf.get_height() + btn_pad_y * 2
-        r_x    = m_x + m_w + 8
-        r_y    = (HUD_H - r_h) // 2
-        self.restart_btn_rect = pygame.Rect(r_x, r_y, r_w, r_h)
-        r_hov  = self.restart_btn_rect.collidepoint(mouse)
-        pygame.draw.rect(self.screen, BTN_HOVER_COLOR if r_hov else BTN_COLOR, self.restart_btn_rect, border_radius=5)
-        pygame.draw.rect(self.screen, BTN_BORDER_COLOR, self.restart_btn_rect, width=1, border_radius=5)
-        self.screen.blit(r_surf, (r_x + btn_pad_x, r_y + btn_pad_y))
 
     def _draw_board(self):
         for row in range(ROWS):
@@ -160,9 +156,9 @@ class FruitBoxAiWatch:
         pygame.draw.rect(self.screen, CELL_BORDER, card, width=1, border_radius=14)
 
         remaining = max(0.0, 5.0 - (time.time() - self.game_over_at)) if self.game_over_at else 5.0
-        over    = self.font_over.render("Done", True, TEXT_PRIMARY)
-        score   = self.font_sub.render(f"Final score: {self.game.score}", True, TEXT_SECONDARY)
-        again   = self.font_sub.render(f"Restarting in {math.ceil(remaining)}…", True, TEXT_SECONDARY)
+        over  = self.font_over.render("Done", True, TEXT_PRIMARY)
+        score = self.font_sub.render(f"Final score: {self.game.score}", True, TEXT_SECONDARY)
+        again = self.font_sub.render(f"Restarting in {math.ceil(remaining)}…", True, TEXT_SECONDARY)
         self.screen.blit(over,  (cx + (card_w - over.get_width())  // 2, cy + 20))
         self.screen.blit(score, (cx + (card_w - score.get_width()) // 2, cy + 72))
         self.screen.blit(again, (cx + (card_w - again.get_width()) // 2, cy + 112))
@@ -176,7 +172,7 @@ class FruitBoxAiWatch:
             pygame.draw.rect(self.screen, (230, 228, 222), self.close_over_rect, border_radius=5)
         self.screen.blit(x_surf, (self.close_over_rect.x + x_pad, self.close_over_rect.y + x_pad))
 
-    # ── AI ────────────────────────────────────────────────────────────
+    # ── AI ────────────────────────────────────────────────────────
 
     def _step_ai(self):
         obs    = self.ai_env.env._obs()
@@ -191,7 +187,7 @@ class FruitBoxAiWatch:
             self.game_over    = True
             self.game_over_at = time.time()
 
-    # ── main loop ─────────────────────────────────────────────────────
+    # ── main loop ─────────────────────────────────────────────────
 
     def run(self):
         while True:
@@ -201,20 +197,24 @@ class FruitBoxAiWatch:
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     sys.exit()
+
+                if event.type == pygame_gui.UI_BUTTON_PRESSED:
+                    if event.ui_element == self.menu_btn:
+                        return
+                    if event.ui_element == self.restart_btn:
+                        self.reset()
+
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE:
                         return
                     if event.key == pygame.K_r:
                         self.reset()
+
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     if self.game_over and self.show_game_over and self.close_over_rect.collidepoint(event.pos):
                         self.show_game_over = False
-                        continue
-                    if self.menu_btn_rect.collidepoint(event.pos):
-                        return
-                    if self.restart_btn_rect.collidepoint(event.pos):
-                        self.reset()
-                        continue
+
+                self.ui.process_events(event)
 
             if not self.game_over:
                 timed_out = self.game.tick(dt)
@@ -237,6 +237,11 @@ class FruitBoxAiWatch:
             self.screen.fill(BG)
             self._draw_hud()
             self._draw_board()
+
+            self.ui.update(dt)
+            self.ui.draw_ui(self.screen)
+
             if self.game_over and self.show_game_over:
                 self._draw_game_over()
+
             pygame.display.flip()
