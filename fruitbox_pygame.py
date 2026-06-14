@@ -140,10 +140,6 @@ class FruitBoxPygame:
         self.screen.blit(timer_label, (WIN_W - PADDING - bar_w, 12))
         self.screen.blit(timer_val,   (WIN_W - PADDING - bar_w, 28))
 
-        # hint
-        hint = self.font_label.render("click and drag to select a rectangle summing to 10  ·  R to restart", True, TEXT_SECONDARY)
-        hw = hint.get_width()
-        self.screen.blit(hint, ((WIN_W - hw) // 2, (HUD_H - hint.get_height()) // 2 + 4))
 
         # hud buttons
         font_btn = pygame.font.SysFont("Arial", 13, bold=True)
