@@ -1,0 +1,110 @@
+name: Build Windows executable
+
+on:
+  push:
+    branches: [master, main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  HF_MODEL_REPO: Fungster/fruitbox-ppo
+  HF_MODEL_REVISION: main
+  HF_MODEL_FILE: fruitbox_ppo_final.zip
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-build.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-build.txt --extra-index-url https://download.pytorch.org/whl/cpu
+
+      - name: Resolve model revision
+        id: model
+        shell: python
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          import os
+          from huggingface_hub import HfApi
+
+          revision = os.environ["HF_MODEL_REVISION"]
+          try:
+              api = HfApi(token=os.environ.get("HF_TOKEN") or None)
+              info = api.repo_info(
+                  os.environ["HF_MODEL_REPO"],
+                  revision=revision,
+              )
+              sha = info.sha
+          except Exception as exc:
+              print(f"Could not resolve Hugging Face revision ({exc}); using {revision!r} for cache key")
+              sha = revision
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as handle:
+              handle.write(f"sha={sha}\n")
+
+      - uses: actions/cache@v4
+        id: model-cache
+        with:
+          path: fruitbox_ppo_final.zip
+          key: hf-model-${{ env.HF_MODEL_REPO }}-${{ steps.model.outputs.sha }}
+
+      - name: Download trained model
+        if: steps.model-cache.outputs.cache-hit != 'true'
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          FRUITBOX_MODEL_MIRROR_URL: ${{ secrets.FRUITBOX_MODEL_MIRROR_URL }}
+        run: python .github/scripts/download_hf_model.py
+
+      - name: Build executable
+        run: |
+          python -m PyInstaller --onefile --windowed --name FruitBox `
+            --add-data "fruitbox_ppo_final.zip;." `
+            --collect-data stable_baselines3 `
+            --collect-data sb3_contrib `
+            --add-binary "C:\Windows\System32\VCRUNTIME140.dll;." `
+            --add-binary "C:\Windows\System32\VCRUNTIME140_1.dll;." `
+            fruitbox_menu.py
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FruitBox-windows
+          path: dist/FruitBox.exe
+
+      - name: Publish rolling pre-release
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+        uses: ncipollo/release-action@v1
+        with:
+          tag: latest
+          name: Latest Windows build
+          body: |
+            Automated Windows build from `${{ github.ref_name }}` @ [`${{ github.sha }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}).
+          artifacts: dist/FruitBox.exe
+          artifactContentType: application/octet-stream
+          allowUpdates: true
+          replacesArtifacts: true
+          makeLatest: true
+          prerelease: true
+
+      - name: Publish version release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/FruitBox.exe
+          generate_release_notes: true
