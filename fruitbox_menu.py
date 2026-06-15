@@ -3,7 +3,6 @@ import sys
 import pygame
 import pygame_gui
 import fruitbox_colors
-import fruitbox_config
 
 from fruitbox_game import FruitBoxGame
 from fruitbox_settings import SettingsOverlay
@@ -50,8 +49,8 @@ class _CustomOverlay:
         self._rows_entry    = None
         self._seed_entry    = None
         self._grid_dd       = None
-        self._grid_type_str = ["Random", "Solvable"][fruitbox_config.get("custom_grid_base")]
-        self._build_ui()
+        self._grid_type_str = "Random"
+        self._reset()
 
     def _ensure_fonts(self):
         if self._font_title is None:
@@ -80,21 +79,20 @@ class _CustomOverlay:
             relative_rect=pygame.Rect(right_x - col_w - gap_x - row_w, y - 6, col_w, field_h),
             manager=self.ui,
         )
-        self._cols_entry.set_text(str(fruitbox_config.get("custom_cols")))
+        self._cols_entry.set_text(str(self._cols))
 
         self._rows_entry = pygame_gui.elements.UITextEntryLine(
             relative_rect=pygame.Rect(right_x - row_w, y - 6, row_w, field_h),
             manager=self.ui,
         )
-        self._rows_entry.set_text(str(fruitbox_config.get("custom_rows")))
+        self._rows_entry.set_text(str(self._rows))
 
         y += row_gap
-        seed_val = fruitbox_config.get("custom_seed")
         self._seed_entry = pygame_gui.elements.UITextEntryLine(
             relative_rect=pygame.Rect(right_x - 200, y - 6, 200, field_h),
             manager=self.ui,
         )
-        self._seed_entry.set_text("" if seed_val < 0 else str(seed_val))
+        self._seed_entry.set_text("" if self._seed < 0 else str(self._seed))
 
         y += row_gap
         self._grid_dd = pygame_gui.elements.UIDropDownMenu(
@@ -112,31 +110,28 @@ class _CustomOverlay:
         if self._cols_entry:
             t = self._cols_entry.get_text().strip()
             if t.isdigit():
-                fruitbox_config.set_key("custom_cols", max(5, min(30, int(t))))
+                self._cols = max(5, min(30, int(t)))
         if self._rows_entry:
             t = self._rows_entry.get_text().strip()
             if t.isdigit():
-                fruitbox_config.set_key("custom_rows", max(3, min(20, int(t))))
+                self._rows = max(3, min(20, int(t)))
         if self._seed_entry:
             t = self._seed_entry.get_text().strip()
-            fruitbox_config.set_key("custom_seed", int(t) if t.isdigit() else -1)
-        fruitbox_config.set_key("custom_grid_base", 0 if self._grid_type_str == "Random" else 1)
+            self._seed = int(t) if t.isdigit() else -1
 
     def _reset(self):
-        fruitbox_config.set_key("custom_cols",      17)
-        fruitbox_config.set_key("custom_rows",      10)
-        fruitbox_config.set_key("custom_seed",      -1)
-        fruitbox_config.set_key("custom_grid_base", 0)
+        self._cols          = 17
+        self._rows          = 10
+        self._seed          = -1
         self._grid_type_str = "Random"
         self._build_ui()
 
     def get_settings(self):
         self._save_values()
-        seed_val = fruitbox_config.get("custom_seed")
         return {
-            "cols":      fruitbox_config.get("custom_cols"),
-            "rows":      fruitbox_config.get("custom_rows"),
-            "seed":      None if seed_val < 0 else seed_val,
+            "cols":      self._cols,
+            "rows":      self._rows,
+            "seed":      None if self._seed < 0 else self._seed,
             "grid_base": "solvable" if self._grid_type_str == "Solvable" else "random",
         }
 
@@ -490,13 +485,14 @@ class FruitBoxMenu:
                 _s   = self.custom_overlay.get_settings()
                 game = FruitBoxGame(rows=_s["rows"], columns=_s["cols"], grid_type=_s["grid_base"])
                 game.reset(seed=_s["seed"])
-                screen = pygame.display.set_mode(game_window_size(_s["rows"], _s["cols"]))
+                screen = self._resize_keep_top(*game_window_size(_s["rows"], _s["cols"]))
             else:
                 game = FruitBoxGame(grid_type=self.grid_type)
                 game.reset()
-                screen = pygame.display.set_mode((GAME_W, GAME_H))
-            FruitBoxPygame(game=game, screen=screen).run()
-            self.screen = pygame.display.set_mode((MENU_W, MENU_H))
+                screen = self._resize_keep_top(GAME_W, GAME_H)
+            _gamemode = "Custom" if self.grid_type == "custom" else "single_player"
+            FruitBoxPygame(game=game, screen=screen, gamemode=_gamemode).run()
+            self.screen = self._resize_keep_top(MENU_W, MENU_H)
 
         elif mode == "vs_ai":
             C = fruitbox_colors.C
