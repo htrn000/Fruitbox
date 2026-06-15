@@ -77,8 +77,9 @@ def draw_rounded_rect_border(surf, color, rect, width=1, radius=8):
 
 
 class FruitBoxPygame:
-    def __init__(self, game=None, screen=None):
-        self.game = game if game is not None else FruitBoxGame()
+    def __init__(self, game=None, screen=None, gamemode="single_player"):
+        self.game    = game if game is not None else FruitBoxGame()
+        self.gamemode = gamemode
         if game is None:
             self.game.reset()
 
@@ -357,7 +358,7 @@ class FruitBoxPygame:
                                 self.pause_btn.disable()
                                 if not self._result_recorded:
                                     fruitbox_stats.record(fruitbox_stats.GameInfo(
-                                        gamemode="single_player",
+                                        gamemode=self.gamemode,
                                         grid_type=self.game.grid_type,
                                         self_score=self.game.score,
                                         time_elapsed=time.time() - self._game_start,
