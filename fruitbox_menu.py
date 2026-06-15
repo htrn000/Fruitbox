@@ -12,6 +12,7 @@ from fruitbox_help import HelpOverlay
 from fruitbox_pygame import (
     FruitBoxPygame,
     WIN_W as GAME_W, WIN_H as GAME_H,
+    game_window_size,
     get_theme, _ASSETS,
 )
 
@@ -487,12 +488,13 @@ class FruitBoxMenu:
         if mode == "single_player":
             if self.grid_type == "custom":
                 _s   = self.custom_overlay.get_settings()
-                game = FruitBoxGame(grid_type=_s["grid_base"])
+                game = FruitBoxGame(rows=_s["rows"], columns=_s["cols"], grid_type=_s["grid_base"])
                 game.reset(seed=_s["seed"])
+                screen = pygame.display.set_mode(game_window_size(_s["rows"], _s["cols"]))
             else:
                 game = FruitBoxGame(grid_type=self.grid_type)
                 game.reset()
-            screen = pygame.display.set_mode((GAME_W, GAME_H))
+                screen = pygame.display.set_mode((GAME_W, GAME_H))
             FruitBoxPygame(game=game, screen=screen).run()
             self.screen = pygame.display.set_mode((MENU_W, MENU_H))
 

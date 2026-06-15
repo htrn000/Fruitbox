@@ -18,6 +18,10 @@ ROWS    = 10
 WIN_W = COLS * CELL + PADDING * 2
 WIN_H = ROWS * CELL + PADDING * 2 + HUD_H
 
+
+def game_window_size(rows, cols):
+    return (cols * CELL + PADDING * 2, rows * CELL + PADDING * 2 + HUD_H)
+
 FPS = 60
 
 # ── palette ───────────────────────────────────────────────────────
@@ -74,9 +78,15 @@ def draw_rounded_rect_border(surf, color, rect, width=1, radius=8):
 
 class FruitBoxPygame:
     def __init__(self, game=None, screen=None):
+        self.game = game if game is not None else FruitBoxGame()
+        if game is None:
+            self.game.reset()
+
+        self._win_w, self._win_h = game_window_size(self.game.rows, self.game.columns)
+
         if screen is None:
             pygame.init()
-            self.screen = pygame.display.set_mode((WIN_W, WIN_H))
+            self.screen = pygame.display.set_mode((self._win_w, self._win_h))
         else:
             self.screen = screen
         pygame.display.set_caption("Fruit Box")
@@ -87,10 +97,6 @@ class FruitBoxPygame:
         self.font_label    = pygame.font.SysFont("Arial", 13)
         self.font_over     = pygame.font.SysFont("Arial", 36, bold=True)
         self.font_over_sub = pygame.font.SysFont("Arial", 18)
-
-        self.game = game if game is not None else FruitBoxGame()
-        if game is None:
-            self.game.reset()
 
         self.drag_start = None
         self.drag_end   = None
@@ -106,10 +112,10 @@ class FruitBoxPygame:
         self._restart_over_rect     = pygame.Rect(0, 0, 0, 0)
         self._pause_alpha           = 0.0
 
-        self.overlay = pygame.Surface((WIN_W, WIN_H), pygame.SRCALPHA)
+        self.overlay = pygame.Surface((self._win_w, self._win_h), pygame.SRCALPHA)
 
         # ── pygame_gui ────────────────────────────────────────────
-        self.ui = pygame_gui.UIManager((WIN_W, WIN_H), get_theme())
+        self.ui = pygame_gui.UIManager((self._win_w, self._win_h), get_theme())
 
         _icon_sz = _BTN_H - 8
         self._icon_pause   = fruitbox_colors.load_icon(os.path.join(_ASSETS, "pause.circle.png"), _icon_sz)
@@ -145,7 +151,7 @@ class FruitBoxPygame:
     def pixel_to_cell(self, px, py):
         col = (px - PADDING) // CELL
         row = (py - HUD_H - PADDING) // CELL
-        if 0 <= row < ROWS and 0 <= col < COLS:
+        if 0 <= row < self.game.rows and 0 <= col < self.game.columns:
             return row, col
         return None
 
@@ -162,8 +168,8 @@ class FruitBoxPygame:
 
     def draw_hud(self):
         C = fruitbox_colors.C
-        pygame.draw.rect(self.screen, C["HUD_BG"], (0, 0, WIN_W, HUD_H))
-        pygame.draw.line(self.screen, C["CELL_BORDER"], (0, HUD_H), (WIN_W, HUD_H), 1)
+        pygame.draw.rect(self.screen, C["HUD_BG"], (0, 0, self._win_w, HUD_H))
+        pygame.draw.line(self.screen, C["CELL_BORDER"], (0, HUD_H), (self._win_w, HUD_H), 1)
 
         self.screen.blit(self.font_label.render("SCORE", True, C["TEXT_SECONDARY"]), (PADDING, 12))
         self.screen.blit(self.font_score.render(str(self.game.score), True, C["TEXT_PRIMARY"]), (PADDING, 28))
@@ -172,7 +178,7 @@ class FruitBoxPygame:
         tcol = C["TIMER_OK"] if t > 30 else (C["TIMER_WARN"] if t > 10 else C["TIMER_DANGER"])
 
         bar_w  = 180
-        bar_x  = WIN_W - PADDING - bar_w
+        bar_x  = self._win_w - PADDING - bar_w
         bar_y  = 48
         bar_h  = 6
         fill_w = int(bar_w * (t / self.game.time_limit))
@@ -186,8 +192,8 @@ class FruitBoxPygame:
         C      = fruitbox_colors.C
         bounds = self.selection_bounds()
 
-        for row in range(ROWS):
-            for col in range(COLS):
+        for row in range(self.game.rows):
+            for col in range(self.game.columns):
                 rect    = self.cell_rect(row, col)
                 val     = self.game.grid[row][col]
                 cleared = (val == -1)
@@ -216,7 +222,7 @@ class FruitBoxPygame:
     def draw_paused(self):
         C         = fruitbox_colors.C
         alpha     = int(self._pause_alpha)
-        grid_rect = pygame.Rect(PADDING, HUD_H + PADDING, COLS * CELL, ROWS * CELL)
+        grid_rect = pygame.Rect(PADDING, HUD_H + PADDING, self.game.columns * CELL, self.game.rows * CELL)
         bg = pygame.Surface((grid_rect.width, grid_rect.height))
         bg.fill(C["PAUSE_COVER"])
         bg.set_alpha(alpha)
@@ -231,13 +237,13 @@ class FruitBoxPygame:
 
     def draw_game_over(self):
         C = fruitbox_colors.C
-        dim = pygame.Surface((WIN_W, WIN_H), pygame.SRCALPHA)
+        dim = pygame.Surface((self._win_w, self._win_h), pygame.SRCALPHA)
         dim.fill(C["DIM"])
         self.screen.blit(dim, (0, 0))
 
         card_w, card_h = 340, 210
-        card_x = (WIN_W - card_w) // 2
-        card_y = (WIN_H - card_h) // 2
+        card_x = (self._win_w - card_w) // 2
+        card_y = (self._win_h - card_h) // 2
         card   = pygame.Rect(card_x, card_y, card_w, card_h)
         self._game_over_card_rect = card
         draw_rounded_rect(self.screen, C["CARD_BG"], card, radius=14)
