@@ -254,8 +254,12 @@ class FruitBoxMenu:
     def _build_ui(self):
         icon_sz = 32 - 6  # 26
 
-        self._icon_arr_l    = fruitbox_colors.load_icon(os.path.join(_ASSETS, "arrowtriangle.left.fill.png"), 32)
-        self._icon_arr_r    = fruitbox_colors.load_icon(os.path.join(_ASSETS, "arrowtriangle.right.fill.png"), 32)
+        def _load_tint(name, sz):
+            raw = pygame.image.load(os.path.join(_ASSETS, name)).convert_alpha()
+            raw = pygame.transform.smoothscale(raw, (sz, sz))
+            return fruitbox_colors.tint_icon(raw, fruitbox_colors.C["PILL_BORDER"])
+        self._icon_arr_l = _load_tint("arrowtriangle.left.fill.png",  32)
+        self._icon_arr_r = _load_tint("arrowtriangle.right.fill.png", 32)
         self._icon_settings = fruitbox_colors.load_icon(os.path.join(_ASSETS, "gearshape.png"), icon_sz)
         self._icon_stats    = fruitbox_colors.load_icon(os.path.join(_ASSETS, "waveform.path.ecg.png"), icon_sz)
         self._icon_help     = fruitbox_colors.load_icon(os.path.join(_ASSETS, "questionmark.circle.png"), icon_sz)
@@ -339,8 +343,15 @@ class FruitBoxMenu:
         total_w = arr_click_w + spacing + pill_w + spacing + arr_click_w
         x = (MENU_W - total_w) // 2
 
+        _hov_col = (255, 255, 255, 55) if fruitbox_colors.is_dark() else (0, 0, 0, 35)
+        _arr_r = self._icon_arr_l.get_width() // 2 + 6
         self.left_arrow_rect = pygame.Rect(x, gt_cy - pill_h // 2, arr_click_w, pill_h)
-        self.screen.blit(self._icon_arr_l, self._icon_arr_l.get_rect(center=(x + arr_click_w // 2, gt_cy)))
+        _lcx = x + arr_click_w // 2
+        if self.left_arrow_rect.collidepoint(mouse):
+            _circ = pygame.Surface((_arr_r * 2, _arr_r * 2), pygame.SRCALPHA)
+            pygame.draw.circle(_circ, _hov_col, (_arr_r, _arr_r), _arr_r)
+            self.screen.blit(_circ, (_lcx - _arr_r, gt_cy - _arr_r))
+        self.screen.blit(self._icon_arr_l, self._icon_arr_l.get_rect(center=(_lcx, gt_cy)))
         x += arr_click_w + spacing
 
         pill_rect = pygame.Rect(x, gt_cy - pill_h // 2, pill_w, pill_h)
@@ -357,7 +368,7 @@ class FruitBoxMenu:
             self.gear_btn_rect = pygame.Rect(_gcx - _gcr, gt_cy - _gcr, _gcr * 2, _gcr * 2)
             if self.gear_btn_rect.collidepoint(mouse):
                 _circ = pygame.Surface((_gcr * 2, _gcr * 2), pygame.SRCALPHA)
-                pygame.draw.circle(_circ, (255, 255, 255, 70), (_gcr, _gcr), _gcr)
+                pygame.draw.circle(_circ, _hov_col, (_gcr, _gcr), _gcr)
                 self.screen.blit(_circ, self.gear_btn_rect.topleft)
             self.screen.blit(self._icon_gear_sm, (_gx, _gy))
         else:
@@ -369,7 +380,12 @@ class FruitBoxMenu:
         x += pill_w + spacing
 
         self.right_arrow_rect = pygame.Rect(x, gt_cy - pill_h // 2, arr_click_w, pill_h)
-        self.screen.blit(self._icon_arr_r, self._icon_arr_r.get_rect(center=(x + arr_click_w // 2, gt_cy)))
+        _rcx = x + arr_click_w // 2
+        if self.right_arrow_rect.collidepoint(mouse):
+            _circ = pygame.Surface((_arr_r * 2, _arr_r * 2), pygame.SRCALPHA)
+            pygame.draw.circle(_circ, _hov_col, (_arr_r, _arr_r), _arr_r)
+            self.screen.blit(_circ, (_rcx - _arr_r, gt_cy - _arr_r))
+        self.screen.blit(self._icon_arr_r, self._icon_arr_r.get_rect(center=(_rcx, gt_cy)))
 
         # bottom hint
         hint = self.font_hint.render("Press ESC during a game to return here", True, C["TEXT_SECONDARY"])
