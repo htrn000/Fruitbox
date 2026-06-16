@@ -50,9 +50,9 @@ BTN_HOVER_COLOR  = (190, 188, 180)
 BTN_BORDER_COLOR = (160, 158, 150)
 
 _BASE_DIR   = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
-_THEME      = os.path.join(_BASE_DIR, "theme.json")
-_THEME_DARK = os.path.join(_BASE_DIR, "theme_dark.json")
 _ASSETS     = os.path.join(_BASE_DIR, "assets")
+_THEME      = os.path.join(_ASSETS, "theme.json")
+_THEME_DARK = os.path.join(_ASSETS, "theme_dark.json")
 
 
 def get_theme():
