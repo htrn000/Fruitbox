@@ -28,8 +28,8 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Install pygbag
-        run: pip install pygbag
+      - name: Install build dependencies
+        run: pip install pygbag huggingface_hub
 
       - name: Build with pygbag
         run: python tools/build_web.py

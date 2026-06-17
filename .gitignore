@@ -20,6 +20,9 @@ logs/
 fruitbox_ppo_final.zip
 fruitbox_ppo_final/
 
+# Large binary model files (tracked on Hugging Face instead)
+*.onnx
+
 # Watch callback temp models
 fruitbox_watch_*.zip
 

@@ -16,6 +16,9 @@ SRC     = os.path.join(ROOT, "src")
 ONNX    = os.path.join(ROOT, "web_assets", "fruitbox_policy.onnx")
 OUT_DIR = os.path.join(SRC, "build", "web")
 
+HF_REPO      = "Fungster/fruitbox-ppo"
+HF_ONNX_FILE = "fruitbox_policy.onnx"
+
 
 _ORT_INJECT = """\
     <!-- onnxruntime-web: must load before Python so `ort` is in global scope -->
@@ -41,7 +44,28 @@ def _inject_ort(out_dir):
     print("  Injected onnxruntime-web script into index.html")
 
 
+def _ensure_onnx():
+    if os.path.isfile(ONNX):
+        return
+    print(f"ONNX model not found locally, downloading from Hugging Face ({HF_REPO})...")
+    try:
+        from huggingface_hub import hf_hub_download
+    except ImportError:
+        raise SystemExit("huggingface_hub is required: pip install huggingface_hub")
+    try:
+        cached = hf_hub_download(
+            HF_REPO, HF_ONNX_FILE,
+            token=os.environ.get("HF_TOKEN") or None,
+        )
+    except Exception as exc:
+        raise SystemExit(f"Failed to download ONNX model: {exc}")
+    os.makedirs(os.path.dirname(ONNX), exist_ok=True)
+    shutil.copy2(cached, ONNX)
+    print(f"Downloaded {ONNX} ({os.path.getsize(ONNX):,} bytes)")
+
+
 def build():
+    _ensure_onnx()
     print("Building web app with pygbag...")
     subprocess.run(
         [sys.executable, "-m", "pygbag", "--build", SRC],

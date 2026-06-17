@@ -39,7 +39,6 @@ def _resource(rel):
 
 
 MODEL_PATH  = _resource("fruitbox_ppo_final")
-ONNX_PATH   = _resource("web_assets/fruitbox_policy.onnx")
 AI_INTERVAL = 0.5
 
 CELL    = 50
@@ -76,7 +75,7 @@ class FruitBoxVs:
             self.screen = pygame.display.set_mode((WIN_W, WIN_H))
         else:
             self.screen = screen
-        _labels = {"solver": "Solver", "rl_model": "RL Model", "onnx": "ONNX"}
+        _labels = {"solver": "Solver", "rl_model": "RL Model"}
         pygame.display.set_caption(f"Fruit Box — vs {_labels.get(opponent, opponent)}")
         self.clock = pygame.time.Clock()
 
@@ -95,10 +94,6 @@ class FruitBoxVs:
             self.ai_env  = ActionMasker(FruitBoxEnv(), mask_fn)
             self.ai_game = self.ai_env.env.game
             self.model   = MaskablePPO.load(MODEL_PATH)
-        elif opponent == "onnx":
-            self.ai_env  = ActionMasker(FruitBoxEnv(), mask_fn)
-            self.ai_game = self.ai_env.env.game
-            self.model   = self._create_onnx_model()
         else:
             self.ai_env = None
             self.model  = None
@@ -230,7 +225,7 @@ class FruitBoxVs:
         self.screen.blit(self.font_label.render("YOU", True, C["TEXT_SECONDARY"]), (self._human_x(), 12))
         self.screen.blit(self.font_score.render(str(self.human_game.score), True, C["TEXT_PRIMARY"]), (self._human_x(), 28))
 
-        ai_label = {"solver": "SOLVER", "rl_model": "RL MODEL", "onnx": "ONNX"}.get(self.opponent, self.opponent.upper())
+        ai_label = {"solver": "SOLVER", "rl_model": "RL MODEL"}.get(self.opponent, self.opponent.upper())
         self.screen.blit(self.font_label.render(ai_label, True, C["TEXT_SECONDARY"]), (self._ai_x(), 12))
         self.screen.blit(self.font_score.render(str(self.ai_game.score), True, C["TEXT_PRIMARY"]), (self._ai_x(), 28))
 
@@ -325,10 +320,6 @@ class FruitBoxVs:
         self._solver_moves = sol['moves'][:]
         self._solver_ready = True
 
-    def _create_onnx_model(self):
-        from .onnx_agent import OnnxAgent
-        return OnnxAgent(ONNX_PATH)
-
     def _step_ai(self):
         if self.opponent == "solver":
             if not self._solver_ready:
@@ -361,7 +352,7 @@ class FruitBoxVs:
         self.human_game.reset()
         self.human_game.paused = False
 
-        if self.opponent in ("rl_model", "onnx"):
+        if self.opponent == "rl_model":
             self.ai_env.reset()
             self.ai_game.grid = self.human_game.grid.copy()
         else:
@@ -483,7 +474,7 @@ class FruitBoxVs:
                 if self.human_over and self.ai_over:
                     self.game_over = True
                     h, a = self.human_game.score, self.ai_game.score
-                    opp  = {"solver": "Solver", "rl_model": "RL Model", "onnx": "ONNX"}.get(self.opponent, self.opponent)
+                    opp  = {"solver": "Solver", "rl_model": "RL Model"}.get(self.opponent, self.opponent)
                     if   h > a: self.over_reason = f"You win!  {h} – {a}"
                     elif a > h: self.over_reason = f"{opp} wins!  {h} – {a}"
                     else:       self.over_reason = f"Tie!  {h} – {a}"
@@ -541,6 +532,6 @@ class FruitBoxVs:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--opponent", choices=["solver", "rl_model", "onnx"], default="solver")
+    parser.add_argument("--opponent", choices=["solver", "rl_model"], default="solver")
     args = parser.parse_args()
     FruitBoxVs(opponent=args.opponent).run()
