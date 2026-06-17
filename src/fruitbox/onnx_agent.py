@@ -12,18 +12,17 @@ need no changes beyond swapping the constructor.
 
 import numpy as np
 
-try:
-    import onnxruntime as ort
-except ImportError as exc:
-    raise ImportError(
-        "onnxruntime is required for OnnxAgent — run: uv sync --group web"
-    ) from exc
-
 
 class OnnxAgent:
     """Runs the exported ONNX policy; same predict() interface as MaskablePPO."""
 
     def __init__(self, model_path: str) -> None:
+        try:
+            import onnxruntime as ort
+        except ImportError as exc:
+            raise ImportError(
+                "onnxruntime is required for OnnxAgent — run: uv sync --group web"
+            ) from exc
         self._sess = ort.InferenceSession(
             model_path, providers=["CPUExecutionProvider"]
         )
@@ -48,3 +47,12 @@ class OnnxAgent:
             logits[~action_masks] = -1e9
 
         return np.int64(np.argmax(logits)), None
+
+    async def predict_async(
+        self,
+        obs: dict,
+        action_masks: "np.ndarray | None" = None,
+        deterministic: bool = True,
+    ) -> "tuple[np.int64, None]":
+        """Async wrapper — makes OnnxAgent duck-compatible with JsOnnxAgent."""
+        return self.predict(obs, action_masks=action_masks, deterministic=deterministic)

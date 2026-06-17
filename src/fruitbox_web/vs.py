@@ -7,12 +7,38 @@ from fruitbox.vs import FruitBoxVs, FPS, HUD_H, PADDING, BOARD_W, BOARD_H, AI_IN
 from fruitbox import colors as fruitbox_colors
 from fruitbox import stats as fruitbox_stats
 from fruitbox import config as fruitbox_config
+from ._common import is_wasm, ONNX_PATH, ONNX_URL, GRID_N
 
 
 class WebVs(FruitBoxVs):
-    """FruitBoxVs with an async run() for pygbag."""
+    """FruitBoxVs using OnnxAgent / JsOnnxAgent with an async run() for pygbag."""
+
+    def _create_onnx_model(self):
+        return None  # deferred to _init_model() at the start of run()
+
+    async def _init_model(self):
+        if is_wasm():
+            from .js_onnx_agent import JsOnnxAgent
+            self.model = await JsOnnxAgent.create(ONNX_URL, GRID_N)
+        else:
+            from fruitbox.onnx_agent import OnnxAgent
+            self.model = OnnxAgent(ONNX_PATH)
+
+    async def _step_ai_async(self):
+        obs   = self.ai_env.env._obs()
+        masks = self.ai_env.env.action_masks()
+        action, _ = await self.model.predict_async(obs, action_masks=masks, deterministic=True)
+        r0, c0, r1, c1 = self.ai_env.env._decode(int(action))
+        self.ai_drag_start   = (r0, c0)
+        self.ai_drag_end     = (r1, c1)
+        self.ai_sel_clear_at = time.time() + 0.2
+        _, no_moves = self.ai_game.apply_move(r0, c0, r1, c1)
+        if no_moves:
+            self.ai_over = True
 
     async def run(self):
+        await self._init_model()
+
         self.clock.tick()
         while True:
             dt = self.clock.tick(FPS) / 1000.0
@@ -88,7 +114,7 @@ class WebVs(FruitBoxVs):
 
                 if not self.ai_over and not self.human_game.paused and now >= self.last_ai_move:
                     self.last_ai_move = now + AI_INTERVAL
-                    self._step_ai()
+                    await self._step_ai_async()
 
                 if now >= self.ai_sel_clear_at:
                     self.ai_drag_start = self.ai_drag_end = None
