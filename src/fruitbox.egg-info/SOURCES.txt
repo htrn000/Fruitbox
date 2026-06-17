@@ -1,6 +1,7 @@
 README.md
 pyproject.toml
 src/fruitbox/__init__.py
+src/fruitbox/__main__.py
 src/fruitbox/ai_watch.py
 src/fruitbox/colors.py
 src/fruitbox/config.py

@@ -24,6 +24,7 @@ fruitbox-watch = "fruitbox.watch:main"
 [dependency-groups]
 build = ["huggingface_hub", "pyinstaller"]
 plot  = ["matplotlib", "pandas", "tensorboard"]
+web   = ["onnxruntime", "onnxscript"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
