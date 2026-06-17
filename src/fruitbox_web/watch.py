@@ -7,17 +7,39 @@ import pygame_gui
 from fruitbox.ai_watch import FruitBoxAiWatch, AI_INTERVAL
 from fruitbox import colors as fruitbox_colors
 from fruitbox import config as fruitbox_config
-from ._common import ONNX_PATH
+from ._common import is_wasm, ONNX_PATH, ONNX_URL, GRID_N
 
 
 class WebAiWatch(FruitBoxAiWatch):
-    """FruitBoxAiWatch using OnnxAgent with an async run() for pygbag."""
+    """FruitBoxAiWatch using OnnxAgent / JsOnnxAgent with an async run() for pygbag."""
 
     def _create_model(self):
-        from fruitbox.onnx_agent import OnnxAgent
-        return OnnxAgent(ONNX_PATH)
+        return None  # deferred to _init_model() at the start of run()
+
+    async def _init_model(self):
+        if is_wasm():
+            from .js_onnx_agent import JsOnnxAgent
+            self.model = await JsOnnxAgent.create(ONNX_URL, GRID_N)
+        else:
+            from fruitbox.onnx_agent import OnnxAgent
+            self.model = OnnxAgent(ONNX_PATH)
+
+    async def _step_ai_async(self):
+        obs   = self.ai_env.env._obs()
+        masks = self.ai_env.env.action_masks()
+        action, _ = await self.model.predict_async(obs, action_masks=masks, deterministic=True)
+        r0, c0, r1, c1 = self.ai_env.env._decode(int(action))
+        self.sel_start    = (r0, c0)
+        self.sel_end      = (r1, c1)
+        self.sel_clear_at = time.time() + 0.3
+        _, no_moves = self.game.apply_move(r0, c0, r1, c1)
+        if no_moves:
+            self.game_over    = True
+            self.game_over_at = time.time()
 
     async def run(self):
+        await self._init_model()
+
         while True:
             dt = self.clock.tick(60) / 1000.0
 
@@ -52,7 +74,7 @@ class WebAiWatch(FruitBoxAiWatch):
                 now = time.time()
                 if now >= self.last_ai_move:
                     self.last_ai_move = now + AI_INTERVAL
-                    self._step_ai()
+                    await self._step_ai_async()
                 if now >= self.sel_clear_at:
                     self.sel_start = self.sel_end = None
 

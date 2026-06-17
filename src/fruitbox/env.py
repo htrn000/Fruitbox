@@ -1,11 +1,25 @@
 import numpy as np
-import gymnasium as gym
-from gymnasium import spaces
+
+try:
+    import gymnasium as gym
+    from gymnasium import spaces
+    _GymBase = gym.Env
+except ImportError:
+    # WASM fallback: gymnasium not yet installed (micropip installs it at runtime)
+    _GymBase = object
+
+    class spaces:
+        class Discrete:
+            def __init__(self, n): self.n = n
+        class Box:
+            def __init__(self, **kw): pass
+        class Dict:
+            def __init__(self, d): pass
 
 from .game import FruitBoxGame
 
 
-class FruitBoxEnv(gym.Env):
+class FruitBoxEnv(_GymBase):
     """
     Observation : Dict
         grid  : (rows*cols,) int8, values -1 (cleared) or 1-9
@@ -69,7 +83,8 @@ class FruitBoxEnv(gym.Env):
     # ── gym API ───────────────────────────────────────────────────────
 
     def reset(self, seed=None, options=None):  # noqa: ARG002
-        super().reset(seed=seed)
+        if _GymBase is not object:
+            super().reset(seed=seed)
         self.game.reset()
         return self._obs(), {}
 

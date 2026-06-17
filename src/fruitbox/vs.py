@@ -6,8 +6,21 @@ import argparse
 
 import pygame
 import pygame_gui
-from sb3_contrib import MaskablePPO
-from sb3_contrib.common.wrappers import ActionMasker
+
+try:
+    from sb3_contrib.common.wrappers import ActionMasker
+except ImportError:
+    class ActionMasker:
+        """Minimal shim used when sb3_contrib is unavailable (WASM build)."""
+        def __init__(self, env, mask_fn):
+            self.env = env
+            self._mask_fn = mask_fn
+        def action_masks(self):
+            return self._mask_fn(self.env)
+        def reset(self, **kwargs):
+            return self.env.reset(**kwargs)
+        def step(self, action):
+            return self.env.step(action)
 
 from .game import FruitBoxGame
 from .env import FruitBoxEnv
@@ -78,14 +91,14 @@ class FruitBoxVs:
         self.ai_game    = FruitBoxGame(grid_type=grid_type)
 
         if opponent == "rl_model":
+            from sb3_contrib import MaskablePPO
             self.ai_env  = ActionMasker(FruitBoxEnv(), mask_fn)
             self.ai_game = self.ai_env.env.game
             self.model   = MaskablePPO.load(MODEL_PATH)
         elif opponent == "onnx":
-            from .onnx_agent import OnnxAgent
             self.ai_env  = ActionMasker(FruitBoxEnv(), mask_fn)
             self.ai_game = self.ai_env.env.game
-            self.model   = OnnxAgent(ONNX_PATH)
+            self.model   = self._create_onnx_model()
         else:
             self.ai_env = None
             self.model  = None
@@ -311,6 +324,10 @@ class FruitBoxVs:
         sol, _ = solve(solver_grid)
         self._solver_moves = sol['moves'][:]
         self._solver_ready = True
+
+    def _create_onnx_model(self):
+        from .onnx_agent import OnnxAgent
+        return OnnxAgent(ONNX_PATH)
 
     def _step_ai(self):
         if self.opponent == "solver":

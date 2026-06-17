@@ -8,10 +8,11 @@ __pycache__/
 venv/
 env/
 
-# PyInstaller
+# PyInstaller / build outputs
 build/
 dist/
 *.spec
+src/build/
 
 # Training artifacts
 checkpoints/

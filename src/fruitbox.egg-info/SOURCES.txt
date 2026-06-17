@@ -29,3 +29,9 @@ src/fruitbox.egg-info/requires.txt
 src/fruitbox.egg-info/top_level.txt
 src/fruitbox_web/__init__.py
 src/fruitbox_web/__main__.py
+src/fruitbox_web/_common.py
+src/fruitbox_web/js_onnx_agent.py
+src/fruitbox_web/menu.py
+src/fruitbox_web/play.py
+src/fruitbox_web/vs.py
+src/fruitbox_web/watch.py
