@@ -1,13 +1,15 @@
 name: Build Windows executable
 
 on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [master, main]
     tags: ["v*"]
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   HF_MODEL_REPO: Fungster/fruitbox-ppo
@@ -17,6 +19,7 @@ env:
 
 jobs:
   build:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: windows-latest
 
     steps:
@@ -116,6 +119,7 @@ jobs:
           python .github/scripts/check_exe_size.py dist/fruitbox.exe
 
       - name: Upload workflow artifact
+        if: github.event_name == 'push'
         uses: actions/upload-artifact@v4
         with:
           name: FruitBox-windows
@@ -123,8 +127,26 @@ jobs:
             dist/fruitbox.exe
             dist/fruitbox-onnx.exe
 
+  release:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download workflow artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: FruitBox-windows
+          path: dist
+
       - name: Publish commit release
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+        if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
