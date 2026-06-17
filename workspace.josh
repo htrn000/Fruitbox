@@ -1,0 +1,9 @@
+# workspace.josh — josh subrepo definition for fruitbox
+#
+# This file is read by josh when cloning/pushing via the :workspace= filter:
+#   git clone https://josh.pegasust.com/pegasust/depot.git::workspace=workspaces/fruitbox.git
+#
+# Entries map monorepo paths into this subrepo:
+#   path/in/subrepo = :/path/in/monorepo
+#
+# Empty = expose workspaces/fruitbox/ as the repo root with no additional mappings.
