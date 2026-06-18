@@ -13,7 +13,8 @@ ROOT     = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WEB_SRC  = os.path.join(ROOT, "web")
 OUT_DIR  = os.path.join(ROOT, "dist", "web")
 ONNX_SRC = os.path.join(ROOT, "web_assets", "fruitbox_policy.onnx")
-CORE_SRC = os.path.join(ROOT, "packages", "fruitbox-core", "src", "fruitbox_core")
+CORE_SRC   = os.path.join(ROOT, "packages", "fruitbox-core", "src", "fruitbox_core")
+ASSETS_SRC = os.path.join(ROOT, "packages", "fruitbox-pygame", "src", "fruitbox_pygame", "assets")
 
 HF_REPO      = "Fungster/fruitbox-ppo"
 HF_ONNX_FILE = "fruitbox_policy.onnx"
@@ -54,6 +55,16 @@ def build():
     shutil.copytree(CORE_SRC, core_dest,
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     print(f"  Copied fruitbox_core/ ({len(os.listdir(core_dest))} files)")
+
+    # Copy icon assets
+    assets_dest = os.path.join(OUT_DIR, "assets")
+    os.makedirs(assets_dest, exist_ok=True)
+    n_icons = 0
+    for fname in os.listdir(ASSETS_SRC):
+        if fname.endswith('.png'):
+            shutil.copy2(os.path.join(ASSETS_SRC, fname), os.path.join(assets_dest, fname))
+            n_icons += 1
+    print(f"  Copied assets/ ({n_icons} icons)")
 
     # Copy ONNX model
     shutil.copy2(ONNX_SRC, os.path.join(OUT_DIR, "fruitbox_policy.onnx"))
