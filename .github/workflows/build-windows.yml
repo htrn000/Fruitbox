@@ -36,7 +36,7 @@ jobs:
         uses: astral-sh/setup-uv@v5
 
       - name: Install build tools
-        run: uv sync --package fruitbox --group build
+        run: uv sync --package fruitbox-ci --group build
 
       - name: Add venv to PATH
         shell: pwsh
@@ -83,14 +83,14 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           FRUITBOX_MODEL_MIRROR_URL: ${{ secrets.FRUITBOX_MODEL_MIRROR_URL }}
-        run: python .github/scripts/download_hf_model.py
+        run: uv run fruitbox-ci download-model
 
       - name: Download ONNX model
         if: steps.onnx-cache.outputs.cache-hit != 'true'
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           FRUITBOX_MODEL_MIRROR_URL: ${{ secrets.FRUITBOX_ONNX_MIRROR_URL }}
-        run: python .github/scripts/download_hf_onnx.py
+        run: uv run fruitbox-ci download-onnx
 
       - name: Build fruitbox-onnx.exe
         run: |
@@ -103,12 +103,12 @@ jobs:
             --add-binary "C:\Windows\System32\VCRUNTIME140.dll;." `
             --add-binary "C:\Windows\System32\VCRUNTIME140_1.dll;." `
             packages/fruitbox-app-onnx/src/fruitbox_app_onnx/__main__.py
-          python .github/scripts/check_exe_size.py dist/fruitbox-onnx.exe
+          uv run fruitbox-ci check-exe-size dist/fruitbox-onnx.exe
 
       - name: Verify CPU torch
         run: |
           uv sync --extra cpu --package fruitbox-app-torch --package fruitbox-pygame --package fruitbox-core --package fruitbox --group build
-          python .github/scripts/verify_torch_cpu.py
+          uv run fruitbox-ci verify-torch-cpu
 
       - name: Build fruitbox.exe (PyTorch)
         run: |
@@ -122,7 +122,7 @@ jobs:
             --add-binary "C:\Windows\System32\VCRUNTIME140.dll;." `
             --add-binary "C:\Windows\System32\VCRUNTIME140_1.dll;." `
             packages/fruitbox-app-torch/src/fruitbox_app_torch/__main__.py
-          python .github/scripts/check_exe_size.py dist/fruitbox.exe
+          uv run fruitbox-ci check-exe-size dist/fruitbox.exe
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4

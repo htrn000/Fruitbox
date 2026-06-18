@@ -16,6 +16,7 @@ members = [
     "packages/fruitbox-app-onnx",
     "packages/fruitbox-train",
     "packages/fruitbox-web",
+    "packages/fruitbox-ci",
 ]
 
 [tool.uv.sources]
@@ -25,12 +26,14 @@ fruitbox-core      = { workspace = true }
 fruitbox-pygame    = { workspace = true }
 fruitbox-train     = { workspace = true }
 fruitbox-web       = { workspace = true }
+fruitbox-ci        = { workspace = true }
 torch = { index = "pytorch-cpu" }
 
 [dependency-groups]
-build = ["huggingface_hub", "pyinstaller"]
+build = ["fruitbox-ci", "pyinstaller"]
+web   = ["fruitbox-ci[web]"]
+export = ["fruitbox-ci[export]"]
 plot  = ["matplotlib", "pandas", "tensorboard"]
-web   = ["onnxruntime", "onnxscript", "pygbag"]
 
 [tool.uv]
 conflicts = [

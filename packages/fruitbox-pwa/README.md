@@ -15,8 +15,8 @@ From repo root:
 
 ```bash
 uv sync --group build --all-packages
-uv run python tools/build_pwa.py          # build → packages/fruitbox-pwa/dist
-uv run python tools/build_pwa.py --serve  # build + preview on :4173
+uv run fruitbox-ci build-pwa          # build → packages/fruitbox-pwa/dist
+uv run fruitbox-ci build-pwa --serve  # build + preview on :4173
 ```
 
 GitHub Pages deploys `packages/fruitbox-pwa/dist` via `.github/workflows/deploy-web.yml`.
@@ -29,4 +29,4 @@ npm install
 npm run dev
 ```
 
-For local dev you still need the wheel and ONNX in `public/` — run `tools/build_pwa.py` once, or copy them manually.
+For local dev you still need the wheel and ONNX in `public/` — run `fruitbox-ci build-pwa` once, or copy them manually.

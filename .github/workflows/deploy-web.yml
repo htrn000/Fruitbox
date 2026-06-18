@@ -33,10 +33,10 @@ jobs:
           python-version: "3.13"
 
       - name: Install Python build dependencies
-        run: uv sync --extra cpu --group build --all-packages
+        run: uv sync --group build --all-packages
 
       - name: Build PWA
-        run: uv run python tools/build_pwa.py
+        run: uv run fruitbox-ci build-pwa
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
