@@ -24,6 +24,18 @@ export = [
 ]
 windows = ["pyinstaller"]
 
+[dependency-groups]
+build = ["pyinstaller"]
+web = ["pygbag"]
+export = [
+    "torch",
+    "stable-baselines3",
+    "sb3-contrib",
+    "onnxruntime",
+    "onnxscript",
+    "numpy",
+]
+
 [project.scripts]
 fruitbox-ci = "fruitbox_ci.__main__:main"
 
@@ -32,3 +44,8 @@ packages = ["src/fruitbox_ci"]
 
 [tool.uv.sources]
 fruitbox-core = { workspace = true }
+
+# Workspace-level installs pull CI groups from this package.
+[tool.uv]
+default-groups = []
+

@@ -29,16 +29,13 @@ fruitbox-web       = { workspace = true }
 fruitbox-ci        = { workspace = true }
 torch = { index = "pytorch-cpu" }
 
-[dependency-groups]
-build = ["fruitbox-ci", "pyinstaller"]
-web   = ["fruitbox-ci[web]"]
-export = ["fruitbox-ci[export]"]
-plot  = ["matplotlib", "pandas", "tensorboard"]
-
 [tool.uv]
 conflicts = [
     [{ extra = "cpu" }, { extra = "cu128" }],
 ]
+
+[dependency-groups]
+plot = ["matplotlib", "pandas", "tensorboard"]
 
 [[tool.uv.index]]
 name = "pytorch-cpu"

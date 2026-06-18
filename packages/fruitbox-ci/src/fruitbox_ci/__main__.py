@@ -3,27 +3,23 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 from collections.abc import Callable
 
-from . import (
-    build_pwa,
-    build_web,
-    check_exe_size,
-    download_model,
-    download_onnx,
-    export_onnx,
-    verify_torch_cpu,
-)
-
-_COMMANDS: dict[str, Callable[[], None]] = {
-    "download-onnx": download_onnx.main,
-    "download-model": download_model.main,
-    "check-exe-size": check_exe_size.main,
-    "verify-torch-cpu": verify_torch_cpu.main,
-    "build-pwa": build_pwa.main,
-    "build-web": build_web.main,
-    "export-onnx": export_onnx.main,
+_COMMAND_MODULES: dict[str, str] = {
+    "download-onnx": "fruitbox_ci.download_onnx",
+    "download-model": "fruitbox_ci.download_model",
+    "check-exe-size": "fruitbox_ci.check_exe_size",
+    "verify-torch-cpu": "fruitbox_ci.verify_torch_cpu",
+    "build-pwa": "fruitbox_ci.build_pwa",
+    "build-web": "fruitbox_ci.build_web",
+    "export-onnx": "fruitbox_ci.export_onnx",
 }
+
+
+def _load_command(name: str) -> Callable[[], None]:
+    module = importlib.import_module(_COMMAND_MODULES[name])
+    return module.main
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -31,7 +27,7 @@ def main(argv: list[str] | None = None) -> None:
         prog="fruitbox-ci",
         description="CI and build helpers for the Fruitbox monorepo",
     )
-    parser.add_argument("command", choices=sorted(_COMMANDS))
+    parser.add_argument("command", choices=sorted(_COMMAND_MODULES))
     parser.add_argument("args", nargs=argparse.REMAINDER, help="Arguments passed to the subcommand")
     ns = parser.parse_args(argv)
 
@@ -43,7 +39,7 @@ def main(argv: list[str] | None = None) -> None:
     prev = sys.argv
     try:
         sys.argv = [ns.command, *ns.args]
-        _COMMANDS[ns.command]()
+        _load_command(ns.command)()
     finally:
         sys.argv = prev
 

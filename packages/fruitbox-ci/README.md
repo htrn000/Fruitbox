@@ -23,8 +23,8 @@ uv run fruitbox-ci export-onnx        # SB3 → ONNX (needs --extra export)
 | `windows` | PyInstaller (used by Windows workflow alongside app packages) |
 
 ```bash
-uv sync --package fruitbox-ci --extra export
-uv run fruitbox-ci export-onnx
+uv sync --package fruitbox-ci --group build
+uv run fruitbox-ci export-onnx   # needs --group export
 ```
 
 GitHub Actions workflows invoke these via `uv run fruitbox-ci <command>`.

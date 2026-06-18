@@ -94,7 +94,7 @@ jobs:
 
       - name: Build fruitbox-onnx.exe
         run: |
-          uv sync --package fruitbox-app-onnx --package fruitbox-pygame --package fruitbox-core --package fruitbox --group build
+          uv sync --package fruitbox-ci --package fruitbox-app-onnx --package fruitbox-pygame --package fruitbox-core --group build
           uv run --package fruitbox-app-onnx python -m PyInstaller --onefile --windowed --name fruitbox-onnx `
             --add-data "fruitbox_policy.onnx;." `
             --add-data "packages/fruitbox-pygame/src/fruitbox_pygame/assets;assets" `
@@ -107,7 +107,7 @@ jobs:
 
       - name: Verify CPU torch
         run: |
-          uv sync --extra cpu --package fruitbox-app-torch --package fruitbox-pygame --package fruitbox-core --package fruitbox --group build
+          uv sync --package fruitbox-ci --extra cpu --package fruitbox-app-torch --package fruitbox-pygame --package fruitbox-core --group build
           uv run fruitbox-ci verify-torch-cpu
 
       - name: Build fruitbox.exe (PyTorch)

@@ -14,7 +14,7 @@ Progressive Web App for Fruit Box.
 From repo root:
 
 ```bash
-uv sync --group build --all-packages
+uv sync --package fruitbox-ci --group build
 uv run fruitbox-ci build-pwa          # build → packages/fruitbox-pwa/dist
 uv run fruitbox-ci build-pwa --serve  # build + preview on :4173
 ```

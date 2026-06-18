@@ -245,20 +245,10 @@ cu128 = [
 ]
 
 [package.dev-dependencies]
-build = [
-    { name = "fruitbox-ci" },
-    { name = "pyinstaller" },
-]
-export = [
-    { name = "fruitbox-ci", extra = ["export"] },
-]
 plot = [
     { name = "matplotlib" },
     { name = "pandas" },
     { name = "tensorboard" },
-]
-web = [
-    { name = "fruitbox-ci", extra = ["web"] },
 ]
 
 [package.metadata]
@@ -269,17 +259,11 @@ requires-dist = [
 provides-extras = ["cpu", "cu128"]
 
 [package.metadata.requires-dev]
-build = [
-    { name = "fruitbox-ci", editable = "packages/fruitbox-ci" },
-    { name = "pyinstaller" },
-]
-export = [{ name = "fruitbox-ci", extras = ["export"], editable = "packages/fruitbox-ci" }]
 plot = [
     { name = "matplotlib" },
     { name = "pandas" },
     { name = "tensorboard" },
 ]
-web = [{ name = "fruitbox-ci", extras = ["web"], editable = "packages/fruitbox-ci" }]
 
 [[package]]
 name = "fruitbox-app-onnx"
@@ -356,6 +340,23 @@ windows = [
     { name = "pyinstaller" },
 ]
 
+[package.dev-dependencies]
+build = [
+    { name = "pyinstaller" },
+]
+export = [
+    { name = "numpy" },
+    { name = "onnxruntime" },
+    { name = "onnxscript" },
+    { name = "sb3-contrib" },
+    { name = "stable-baselines3" },
+    { name = "torch", version = "2.12.1", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin' or (extra == 'extra-8-fruitbox-cpu' and extra == 'extra-8-fruitbox-cu128')" },
+    { name = "torch", version = "2.12.1+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin' or (extra == 'extra-8-fruitbox-cpu' and extra == 'extra-8-fruitbox-cu128')" },
+]
+web = [
+    { name = "pygbag" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "fruitbox-core", editable = "packages/fruitbox-core" },
@@ -370,6 +371,18 @@ requires-dist = [
     { name = "torch", marker = "extra == 'export'", index = "https://download.pytorch.org/whl/cpu" },
 ]
 provides-extras = ["web", "export", "windows"]
+
+[package.metadata.requires-dev]
+build = [{ name = "pyinstaller" }]
+export = [
+    { name = "numpy" },
+    { name = "onnxruntime" },
+    { name = "onnxscript" },
+    { name = "sb3-contrib" },
+    { name = "stable-baselines3" },
+    { name = "torch", index = "https://download.pytorch.org/whl/cpu" },
+]
+web = [{ name = "pygbag" }]
 
 [[package]]
 name = "fruitbox-core"

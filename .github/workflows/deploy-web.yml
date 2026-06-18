@@ -38,7 +38,7 @@ jobs:
 
       - name: Install build dependencies
         if: github.event.action != 'closed'
-        run: uv sync --group build --all-packages
+        run: uv sync --package fruitbox-ci --group build
 
       - name: Build PWA
         if: github.event.action != 'closed'
