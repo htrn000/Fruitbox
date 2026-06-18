@@ -1088,42 +1088,8 @@ async function showMenu() {
   closeAllOverlays();
   showScreen('screen-menu');
   updatePill();
-  await refreshStats();
 }
 
-async function refreshStats() {
-  try {
-    const s = JSON.parse(py('stats_summary_json'));
-    const totalGames = s.total_games || 0;
-    if (!totalGames) { $('stats-panel').innerHTML = '<div class="stats-loading">No games yet</div>'; return; }
-    const totalTime = s.total_time || 0;
-    const h = Math.floor(totalTime / 3600), m = Math.floor((totalTime % 3600) / 60);
-    $('stats-panel').innerHTML = `
-      <div class="stats-grid">
-        <div class="stats-section">
-          <div class="stats-section-title">Overall</div>
-          <div class="stats-row"><span>Games</span><span class="stats-val">${s.total_games}</span></div>
-          <div class="stats-row"><span>Time</span><span class="stats-val">${h}h ${m}m</span></div>
-        </div>
-        <div class="stats-section">
-          <div class="stats-section-title">VS AI</div>
-          <div class="stats-row"><span>Wins</span><span class="stats-val">${s.vs_wins}</span></div>
-          <div class="stats-row"><span>Losses</span><span class="stats-val">${s.vs_losses}</span></div>
-          <div class="stats-row"><span>Ties</span><span class="stats-val">${s.vs_ties}</span></div>
-        </div>
-        <div class="stats-section">
-          <div class="stats-section-title">Best (Random)</div>
-          <div class="stats-row"><span>Score</span><span class="stats-val">${s.random_best ?? '—'}</span></div>
-        </div>
-        <div class="stats-section">
-          <div class="stats-section-title">Best (Solvable)</div>
-          <div class="stats-row"><span>Score</span><span class="stats-val">${s.solvable_best ?? '—'}</span></div>
-        </div>
-      </div>`;
-  } catch(e) {
-    $('stats-panel').innerHTML = '<div class="stats-loading">Stats unavailable</div>';
-  }
-}
 
 // ── Global keyboard handler ───────────────────────────────────────────────────
 function setupKeyboard() {

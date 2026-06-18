@@ -24,13 +24,12 @@
     <div class="menu-card">
 
       <div class="menu-top">
-        <h1 class="menu-title">Fruit Box</h1>
         <div class="menu-icons">
-          <button class="icon-btn" id="btn-dark-mode" title="Toggle light/dark">
-            <img class="icon-img" src="./assets/circle.lefthalf.fill.png" alt="">
-          </button>
           <button class="icon-btn" id="btn-help" title="Help">
             <img class="icon-img" src="./assets/questionmark.circle.png" alt="">
+          </button>
+          <button class="icon-btn" id="btn-dark-mode" title="Toggle light/dark">
+            <img class="icon-img" src="./assets/circle.lefthalf.fill.png" alt="">
           </button>
           <button class="icon-btn" id="btn-stats-overlay" title="Statistics">
             <img class="icon-img" src="./assets/waveform.path.ecg.png" alt="">
@@ -41,30 +40,30 @@
         </div>
       </div>
 
-      <div class="pill-selector">
-        <button class="pill-arrow" id="grid-prev">
-          <img class="icon-img" src="./assets/arrowtriangle.left.fill.png" alt="">
-        </button>
-        <div class="pill-display" id="pill-display">
-          <span id="grid-type-text">Random</span>
-          <button class="pill-gear hidden" id="pill-gear" title="Custom settings">
-            <img class="icon-img pill-gear-icon" src="./assets/gearshape.png" alt="">
+      <div class="menu-btns">
+        <h1 class="menu-title">Fruit Box</h1>
+        <div class="menu-btn-row">
+          <button class="menu-mode-btn primary" id="btn-play">Single Player</button>
+          <button class="menu-mode-btn primary" id="btn-vs">vs AI</button>
+        </div>
+
+        <div class="pill-selector">
+          <button class="pill-arrow" id="grid-prev">
+            <img class="icon-img" src="./assets/arrowtriangle.left.fill.png" alt="">
+          </button>
+          <div class="pill-display" id="pill-display">
+            <span id="grid-type-text">Random</span>
+            <button class="pill-gear hidden" id="pill-gear" title="Custom settings">
+              <img class="icon-img pill-gear-icon" src="./assets/gearshape.png" alt="">
+            </button>
+          </div>
+          <button class="pill-arrow" id="grid-next">
+            <img class="icon-img" src="./assets/arrowtriangle.right.fill.png" alt="">
           </button>
         </div>
-        <button class="pill-arrow" id="grid-next">
-          <img class="icon-img" src="./assets/arrowtriangle.right.fill.png" alt="">
-        </button>
       </div>
 
-      <div class="menu-btns">
-        <button class="menu-mode-btn primary" id="btn-play">Single Player</button>
-        <button class="menu-mode-btn primary" id="btn-vs">vs AI</button>
-        <button class="menu-mode-btn secondary" id="btn-watch">Watch AI</button>
-      </div>
-
-      <div class="stats-panel" id="stats-panel">
-        <div class="stats-loading">Loading stats…</div>
-      </div>
+      <button class="menu-demo-btn" id="btn-watch">Demo AI</button>
 
     </div>
   </div>
@@ -141,7 +140,7 @@
     </div>
   </div>
 
-  <!-- Watch AI -->
+  <!-- Demo AI -->
   <div id="screen-watch" class="screen">
     <div class="game-wrap">
       <div class="hud">
@@ -162,7 +161,7 @@
         <div class="over-card">
           <div class="over-reason">Game Over</div>
           <div class="over-score">AI Score: <strong id="watch-over-score">0</strong></div>
-          <button class="menu-mode-btn primary" id="watch-over-again">Watch Again</button>
+          <button class="menu-mode-btn primary" id="watch-over-again">Demo Again</button>
           <button class="menu-mode-btn secondary" id="watch-over-menu">Menu</button>
         </div>
       </div>
