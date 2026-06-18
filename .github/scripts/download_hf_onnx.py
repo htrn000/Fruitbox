@@ -86,7 +86,8 @@ def main() -> None:
     revision = os.environ["HF_MODEL_REVISION"]
     filename = os.environ.get("HF_ONNX_FILE", "fruitbox_policy.onnx")
     token = os.environ.get("HF_TOKEN") or None
-    dest = os.path.join(os.getcwd(), filename)
+    dest_env = os.environ.get("HF_ONNX_DEST")
+    dest = os.path.join(os.getcwd(), dest_env if dest_env else filename)
 
     if os.path.isfile(dest) and os.path.getsize(dest) > 1024:
         print(f"Using existing {filename} ({os.path.getsize(dest)} bytes)")
