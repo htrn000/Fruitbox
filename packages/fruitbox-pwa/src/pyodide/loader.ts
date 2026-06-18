@@ -65,22 +65,6 @@ await micropip.install("${wheel}")
   return pyodidePromise;
 }
 
-type PyCallable = PyProxy & {
-  call?: (method: string, ...args: unknown[]) => unknown;
-};
-
-export function callPyMethod<T>(obj: PyProxy, method: string, ...args: unknown[]): T {
-  const target = obj as PyCallable;
-  if (typeof target.call === "function") {
-    return target.call(method, ...args) as T;
-  }
-  const callable = obj[method];
-  if (typeof callable !== "function") {
-    throw new Error(`${method} is not callable on Python object`);
-  }
-  return (callable as (...a: unknown[]) => T).apply(obj, args);
-}
-
 export function gridToJs(gridProxy: PyProxy, rows: number, cols: number): number[][] {
   const js = gridProxy.toJs?.({ depth: -1, create_proxies: false });
 
