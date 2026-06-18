@@ -33,7 +33,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.wrappers import ActionMasker
 
-from fruitbox.env import FruitBoxEnv
+from fruitbox_core.env import FruitBoxEnv
 
 
 # ── wrapper ───────────────────────────────────────────────────────────────────

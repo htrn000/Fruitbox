@@ -62,3 +62,13 @@ uv run fruitbox-train --watch        # train with live preview
 ```
 
 Windows executables are built in CI via PyInstaller (`fruitbox.exe` and `fruitbox-onnx.exe`). The ONNX model is bundled from [Hugging Face](https://huggingface.co/Fungster/fruitbox-ppo/blob/main/fruitbox_policy.onnx).
+
+### Web (pygbag / WASM)
+
+```bash
+uv sync --extra cpu --all-packages --group web --group build
+uv run python tools/build_web.py          # output: src/build/web/
+uv run python tools/build_web.py --serve  # build + local preview
+```
+
+The build vendors workspace packages into `src/`, patches pygbag template issues (BrowserFS CDN, onnxruntime-web, autorun), and bundles the ONNX policy for vs-AI / watch-AI modes. First browser load compiles the Python bundle via WASM and can take a few minutes.
