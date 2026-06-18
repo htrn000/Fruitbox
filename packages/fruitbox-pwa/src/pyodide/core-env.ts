@@ -2,6 +2,7 @@ import {
   boolMaskToArray,
   ndarrayToFloat32,
   ndarrayToInt8,
+  pyDictGet,
   type PyodideRuntime,
   type PyProxy,
 } from "./loader";
@@ -11,7 +12,7 @@ interface FruitBoxEnvPy extends PyProxy {
   reset(): void;
   _obs(): PyProxy;
   action_masks(): PyProxy;
-  _decode(action: number): PyProxy;
+  _decode(action: number): [number, number, number, number];
 }
 
 export class CoreEnv {
@@ -40,10 +41,9 @@ export class CoreEnv {
 
   obs(): { grid: Int8Array; score: Float32Array } {
     const obsProxy = this.py._obs();
-    const get = obsProxy.get as (k: string) => PyProxy;
     return {
-      grid: ndarrayToInt8(get("grid")),
-      score: ndarrayToFloat32(get("score")),
+      grid: ndarrayToInt8(pyDictGet(obsProxy, "grid")),
+      score: ndarrayToFloat32(pyDictGet(obsProxy, "score")),
     };
   }
 
@@ -52,8 +52,7 @@ export class CoreEnv {
   }
 
   decodeAction(action: number): [number, number, number, number] {
-    const decoded = this.py._decode(action);
-    return decoded.toJs?.({ create_proxies: false }) as [number, number, number, number];
+    return this.py._decode(action);
   }
 
   reset(): void {

@@ -100,9 +100,10 @@ def staging() -> None:
     try:
         time.sleep(2)
         env = os.environ.copy()
-        env["STAGING_URL"] = "http://127.0.0.1:4173/Fruitbox/"
+    env["STAGING_URL"] = "http://127.0.0.1:4173/Fruitbox/"
         _run(["node", "staging/smoke.mjs", "app"], cwd=pwa, env=env)
-        print("staging: single-player smoke test passed")
+        _run(["node", "staging/smoke.mjs", "vs"], cwd=pwa, env=env)
+        print("staging: single-player and VS AI smoke tests passed")
     finally:
         proc.terminate()
         proc.wait(timeout=10)

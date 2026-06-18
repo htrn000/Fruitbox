@@ -78,10 +78,44 @@ async function runSinglePlayer() {
   }
 }
 
+async function runVsAi() {
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (err) => errors.push(err.message));
+  page.on("console", (msg) => {
+    if (msg.type() === "error") errors.push(msg.text());
+  });
+
+  await page.goto(BASE, { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForFunction(() => !document.getElementById("loading-screen"), null, { timeout: 180000 });
+
+  await page.getByRole("button", { name: /vs ai/i }).click();
+  await page.waitForSelector("canvas", { timeout: 180000 });
+
+  if ((await page.locator(".error-inline").count()) > 0) {
+    const msg = await page.locator(".error-inline").innerText();
+    throw new Error(`VS AI failed to start: ${msg}`);
+  }
+
+  // Wait for first AI turn (AI_INTERVAL is 0.5s + ONNX inference)
+  await page.waitForTimeout(4000);
+
+  if (errors.some((e) => e.includes("pyproxy") || e.includes("Symbol(pyproxy"))) {
+    throw new Error(`VS AI Pyodide error: ${errors.join("; ")}`);
+  }
+  if (errors.length) {
+    throw new Error(`VS AI console errors: ${errors.join("; ")}`);
+  }
+
+  await browser.close();
+}
+
 async function main() {
   const mode = process.argv[2] ?? "all";
   if (mode === "probe" || mode === "all") await runProbe();
   if (mode === "app" || mode === "all") await runSinglePlayer();
+  if (mode === "vs" || mode === "all") await runVsAi();
   console.log("STAGING OK");
 }
 

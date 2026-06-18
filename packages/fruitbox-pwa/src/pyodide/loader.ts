@@ -123,7 +123,16 @@ export function gridToJs(gridProxy: PyProxy, rows: number, cols: number): number
   throw new Error(`Unexpected grid shape: ${flat.length} values for ${rows}x${cols}`);
 }
 
+export function pyDictGet(dict: PyProxy, key: string): PyProxy {
+  const d = dict as { get(key: string): PyProxy };
+  return d.get(key);
+}
+
 export function ndarrayToFloat32(arrProxy: PyProxy): Float32Array {
+  const tolist = (arrProxy as { tolist?: () => number[] }).tolist;
+  if (typeof tolist === "function") {
+    return Float32Array.from(tolist.call(arrProxy));
+  }
   const js = arrProxy.toJs?.({ create_proxies: false });
   if (js instanceof Float32Array) return js;
   if (Array.isArray(js)) return Float32Array.from(js as number[]);
@@ -131,6 +140,10 @@ export function ndarrayToFloat32(arrProxy: PyProxy): Float32Array {
 }
 
 export function ndarrayToInt8(arrProxy: PyProxy): Int8Array {
+  const tolist = (arrProxy as { tolist?: () => number[] }).tolist;
+  if (typeof tolist === "function") {
+    return Int8Array.from(tolist.call(arrProxy));
+  }
   const js = arrProxy.toJs?.({ create_proxies: false });
   if (js instanceof Int8Array) return js;
   if (Array.isArray(js)) return Int8Array.from(js as number[]);
@@ -138,6 +151,10 @@ export function ndarrayToInt8(arrProxy: PyProxy): Int8Array {
 }
 
 export function boolMaskToArray(maskProxy: PyProxy): boolean[] {
+  const tolist = (maskProxy as { tolist?: () => boolean[] }).tolist;
+  if (typeof tolist === "function") {
+    return tolist.call(maskProxy);
+  }
   const js = maskProxy.toJs?.({ create_proxies: false });
   if (Array.isArray(js)) return js as boolean[];
   throw new Error("Expected boolean mask from Python");
