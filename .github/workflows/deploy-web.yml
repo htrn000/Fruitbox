@@ -3,23 +3,27 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [master, main]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, closed]
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
+# Production and each PR preview deploy independently.
 concurrency:
-  group: pages
+  group: pages-${{ github.event_name == 'pull_request' && format('preview-{0}', github.event.pull_request.number) || 'production' }}
   cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
 
 jobs:
   build-and-deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
+    # Skip draft PRs (until marked ready). Always run on close to clean up previews.
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.draft == false ||
+      github.event.action == 'closed'
 
     steps:
       - uses: actions/checkout@v4
@@ -32,20 +36,32 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Install Python build dependencies
+      - name: Install build dependencies
+        if: github.event.action != 'closed'
         run: uv sync --group build --all-packages
 
       - name: Build PWA
+        if: github.event.action != 'closed'
+        env:
+          VITE_BASE: >-
+            ${{ github.event_name == 'pull_request'
+                && format('/Fruitbox/pr-preview/pr-{0}/', github.event.pull_request.number)
+                || '/Fruitbox/' }}
         run: uv run fruitbox-ci build-pwa
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Deploy PR preview
+        if: github.event_name == 'pull_request'
+        uses: rossjrw/pr-preview-action@v1
         with:
-          path: packages/fruitbox-pwa/dist
+          source-dir: packages/fruitbox-pwa/dist
+          preview-branch: gh-pages
+          umbrella-dir: pr-preview
+          action: ${{ github.event.action == 'closed' && 'remove' || 'deploy' }}
 
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Deploy production
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: packages/fruitbox-pwa/dist
+          keep_files: true

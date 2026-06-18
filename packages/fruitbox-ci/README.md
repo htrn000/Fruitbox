@@ -28,3 +28,16 @@ uv run fruitbox-ci export-onnx
 ```
 
 GitHub Actions workflows invoke these via `uv run fruitbox-ci <command>`.
+
+## GitHub Pages
+
+Deploy workflow: `.github/workflows/deploy-web.yml`
+
+Requires repo **Settings → Pages → Deploy from a branch → `gh-pages`**.
+
+| Trigger | Result |
+|---|---|
+| Push to `master`/`main` | Production at `/Fruitbox/` |
+| PR marked ready (`ready_for_review`) | Preview deploy + PR comment |
+| Push to open, non-draft PR | Preview updated |
+| PR closed | Preview removed |

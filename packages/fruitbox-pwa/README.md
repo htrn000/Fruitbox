@@ -21,6 +21,11 @@ uv run fruitbox-ci build-pwa --serve  # build + preview on :4173
 
 GitHub Pages deploys `packages/fruitbox-pwa/dist` via `.github/workflows/deploy-web.yml`.
 
+**Pages settings required:** Settings → Pages → **Deploy from a branch** → branch `gh-pages` → `/ (root)`.
+
+- **Production** (`master`/`main`): https://htrn000.github.io/Fruitbox/
+- **PR previews** (when PR is marked ready, and on each push while open): `https://htrn000.github.io/Fruitbox/pr-preview/pr-<number>/` — link posted as a PR comment automatically
+
 ## Dev
 
 ```bash
