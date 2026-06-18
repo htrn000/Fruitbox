@@ -11,10 +11,15 @@ uv run fruitbox-ci check-exe-size     # Fail if .exe exceeds size budget
 uv run fruitbox-ci verify-torch-cpu   # Fail if CUDA torch is installed
 uv run fruitbox-ci build-pwa          # Vite PWA → packages/fruitbox-pwa/dist
 uv run fruitbox-ci build-web          # Legacy pygbag build
-uv run fruitbox-ci export-onnx        # SB3 → ONNX (needs --extra export)
+uv run fruitbox-ci export-onnx        # SB3 → ONNX (needs --group export)
+uv run fruitbox-ci validate-ci        # Smoke-test all CI uv sync commands
 ```
 
-## Extras
+CI workflows run `uv run --package fruitbox-ci fruitbox-ci validate-ci` first.
+
+```bash
+uv sync --package fruitbox-ci --group build   # always include fruitbox-ci with --group
+```
 
 | Extra | Adds |
 |---|---|
