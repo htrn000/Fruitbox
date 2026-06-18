@@ -28,6 +28,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: astral-sh/setup-uv@v5
+
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -36,9 +38,9 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Install build dependencies
+      - name: Validate CI install commands
         if: github.event.action != 'closed'
-        run: uv sync --package fruitbox-ci --group build
+        run: uv run --package fruitbox-ci fruitbox-ci validate-ci
 
       - name: Build PWA
         if: github.event.action != 'closed'

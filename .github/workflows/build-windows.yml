@@ -35,8 +35,8 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
 
-      - name: Install build tools
-        run: uv sync --package fruitbox-ci --group build
+      - name: Validate CI install commands
+        run: uv run --package fruitbox-ci fruitbox-ci validate-ci
 
       - name: Add venv to PATH
         shell: pwsh
@@ -44,27 +44,26 @@ jobs:
 
       - name: Resolve model revision
         id: model
-        shell: python
+        shell: pwsh
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
+          uv run python -c @"
           import os
           from huggingface_hub import HfApi
 
-          revision = os.environ["HF_MODEL_REVISION"]
+          revision = os.environ['HF_MODEL_REVISION']
           try:
-              api = HfApi(token=os.environ.get("HF_TOKEN") or None)
-              info = api.repo_info(
-                  os.environ["HF_MODEL_REPO"],
-                  revision=revision,
-              )
+              api = HfApi(token=os.environ.get('HF_TOKEN') or None)
+              info = api.repo_info(os.environ['HF_MODEL_REPO'], revision=revision)
               sha = info.sha
           except Exception as exc:
-              print(f"Could not resolve Hugging Face revision ({exc}); using {revision!r} for cache key")
+              print(f'Could not resolve Hugging Face revision ({exc}); using {revision!r} for cache key')
               sha = revision
 
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as handle:
-              handle.write(f"sha={sha}\n")
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as handle:
+              handle.write(f'sha={sha}\n')
+          "@
 
       - uses: actions/cache@v4
         id: model-cache

@@ -14,6 +14,7 @@ _COMMAND_MODULES: dict[str, str] = {
     "build-pwa": "fruitbox_ci.build_pwa",
     "build-web": "fruitbox_ci.build_web",
     "export-onnx": "fruitbox_ci.export_onnx",
+    "validate-ci": "fruitbox_ci.validate_ci",
 }
 
 
