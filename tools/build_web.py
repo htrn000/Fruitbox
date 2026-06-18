@@ -94,6 +94,7 @@ def _vendor_packages():
                 "data/translations",
                 "data/licenses",
                 "__pyinstaller",
+                "tests",
             ),
         )
         if name == "pygame_gui":
@@ -141,6 +142,15 @@ def _patch_index_html(out_dir):
 def _ensure_onnx():
     if os.path.isfile(ONNX):
         return
+
+    # CI may download to repo root via .github/scripts/download_hf_onnx.py
+    root_onnx = os.path.join(ROOT, HF_ONNX_FILE)
+    if os.path.isfile(root_onnx):
+        os.makedirs(os.path.dirname(ONNX), exist_ok=True)
+        shutil.copy2(root_onnx, ONNX)
+        print(f"Using ONNX model from {root_onnx}")
+        return
+
     print(f"ONNX model not found locally, downloading from Hugging Face ({HF_REPO})...")
     try:
         from huggingface_hub import hf_hub_download
@@ -184,6 +194,11 @@ def build():
     print(f"\nBuild complete: {OUT_DIR}")
 
 
+def verify():
+    script = os.path.join(ROOT, "tools", "verify_web_build.py")
+    subprocess.run([sys.executable, script], check=True, cwd=ROOT)
+
+
 def serve():
     """Serve the build with headers suitable for pygbag WASM."""
     import mimetypes
@@ -211,8 +226,11 @@ def serve():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--serve", action="store_true", help="start a local preview server after building")
+    parser.add_argument("--verify", action="store_true", help="verify build artifacts after building")
     args = parser.parse_args()
 
     build()
+    if args.verify or os.environ.get("CI"):
+        verify()
     if args.serve:
         serve()
