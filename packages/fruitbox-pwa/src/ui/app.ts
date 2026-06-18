@@ -54,8 +54,17 @@ export class App {
     const gridType = this.menu.gridType;
 
     if (action === "single_player") {
-      const game = CoreGame.create(this.runtime, { gridType });
-      this.active = new GameScreen(this.stage, game, this.stats, "single_player", () => this.showMenu());
+      try {
+        const game = CoreGame.create(this.runtime, { gridType });
+        this.active = new GameScreen(this.stage, game, this.stats, "single_player", () => this.showMenu());
+      } catch (err) {
+        console.error(err);
+        this.stage.innerHTML = `
+          <p class="loading-inline error-inline">Failed to start game: ${String(err)}</p>
+          <button type="button" class="menu-btn" data-action="back">Back to menu</button>
+        `;
+        this.stage.querySelector('[data-action="back"]')!.addEventListener("click", () => this.showMenu());
+      }
       return;
     }
 

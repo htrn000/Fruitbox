@@ -20,6 +20,7 @@ export function mountCanvas(
   };
 
   applyFit();
+  requestAnimationFrame(applyFit);
   window.addEventListener("resize", applyFit);
   window.addEventListener("orientationchange", applyFit);
 
