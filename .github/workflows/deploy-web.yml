@@ -17,7 +17,8 @@ concurrency:
 env:
   HF_MODEL_REPO: Fungster/fruitbox-ppo
   HF_MODEL_REVISION: main
-  HF_ONNX_FILE: web_assets/fruitbox_policy.onnx
+  HF_ONNX_FILE: fruitbox_policy.onnx
+  HF_ONNX_DEST: web_assets/fruitbox_policy.onnx
 
 jobs:
   build-and-deploy:
