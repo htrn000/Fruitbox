@@ -1,8 +1,4 @@
-import { gridToJs, type PyodideRuntime, type PyProxy } from "./loader";
-
-function callPy<T>(fn: unknown, ...args: unknown[]): T {
-  return (fn as (...a: unknown[]) => T)(...args);
-}
+import { callPyMethod, gridToJs, type PyodideRuntime, type PyProxy } from "./loader";
 
 export interface CoreGameOptions {
   rows?: number;
@@ -36,7 +32,7 @@ export class CoreGame {
 
   syncGridFrom(other: CoreGame): void {
     const grid = other.py.grid as PyProxy;
-    const copy = callPy<PyProxy>(grid.copy);
+    const copy = callPyMethod<PyProxy>(grid, "copy");
     this.py.grid = copy;
     this.py.seed = other.py.seed;
   }
@@ -74,32 +70,32 @@ export class CoreGame {
   }
 
   reset(seed?: number | null): number[][] {
-    callPy(this.py.reset, seed ?? null);
+    callPyMethod(this.py, "reset", seed ?? null);
     return this.grid();
   }
 
   tick(dt: number): boolean {
-    return callPy<boolean>(this.py.tick, dt);
+    return callPyMethod<boolean>(this.py, "tick", dt);
   }
 
   togglePause(): void {
-    callPy(this.py.toggle_pause);
+    callPyMethod(this.py, "toggle_pause");
   }
 
   pause(): void {
-    callPy(this.py.pause);
+    callPyMethod(this.py, "pause");
   }
 
   resume(): void {
-    callPy(this.py.resume);
+    callPyMethod(this.py, "resume");
   }
 
   validateMove(r1: number, c1: number, r2: number, c2: number): boolean {
-    return callPy<boolean>(this.py.validate_move, r1, c1, r2, c2);
+    return callPyMethod<boolean>(this.py, "validate_move", r1, c1, r2, c2);
   }
 
   applyMove(r1: number, c1: number, r2: number, c2: number): { points: number; done: boolean } {
-    const result = callPy<PyProxy | [number, boolean]>(this.py.apply_move, r1, c1, r2, c2);
+    const result = callPyMethod<PyProxy | [number, boolean]>(this.py, "apply_move", r1, c1, r2, c2);
     if (Array.isArray(result)) {
       return { points: result[0], done: result[1] };
     }

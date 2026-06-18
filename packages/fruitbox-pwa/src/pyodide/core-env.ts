@@ -1,14 +1,11 @@
 import {
   boolMaskToArray,
+  callPyMethod,
   ndarrayToFloat32,
   ndarrayToInt8,
   type PyodideRuntime,
   type PyProxy,
 } from "./loader";
-
-function callPy<T>(fn: unknown, ...args: unknown[]): T {
-  return (fn as (...a: unknown[]) => T)(...args);
-}
 
 export class CoreEnv {
   private py: PyProxy;
@@ -21,7 +18,7 @@ export class CoreEnv {
     const mod = runtime.pyimport("fruitbox_core.env");
     const FruitBoxEnv = mod.FruitBoxEnv as new (opts?: Record<string, unknown>) => PyProxy;
     const pyEnv = new FruitBoxEnv({ grid_type: gridType });
-    callPy(pyEnv.reset);
+    callPyMethod(pyEnv, "reset");
     return new CoreEnv(pyEnv);
   }
 
@@ -30,7 +27,7 @@ export class CoreEnv {
   }
 
   obs(): { grid: Int8Array; score: Float32Array } {
-    const obsProxy = callPy<PyProxy>(this.py._obs);
+    const obsProxy = callPyMethod<PyProxy>(this.py, "_obs");
     const get = obsProxy.get as (k: string) => PyProxy;
     return {
       grid: ndarrayToInt8(get("grid")),
@@ -39,16 +36,16 @@ export class CoreEnv {
   }
 
   actionMasks(): boolean[] {
-    return boolMaskToArray(callPy<PyProxy>(this.py.action_masks));
+    return boolMaskToArray(callPyMethod<PyProxy>(this.py, "action_masks"));
   }
 
   decodeAction(action: number): [number, number, number, number] {
-    const decoded = callPy<PyProxy>(this.py._decode, action);
+    const decoded = callPyMethod<PyProxy>(this.py, "_decode", action);
     return decoded.toJs?.({ create_proxies: false }) as [number, number, number, number];
   }
 
   reset(): void {
-    callPy(this.py.reset);
+    callPyMethod(this.py, "reset");
   }
 
   destroy(): void {
