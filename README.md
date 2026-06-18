@@ -52,7 +52,8 @@ This repo is a [uv workspace](https://docs.astral.sh/uv/concepts/projects/worksp
 | `fruitbox-app-torch` | Desktop app with SB3/PyTorch (`fruitbox` CLI) |
 | `fruitbox-app-onnx` | Desktop app with ONNX only (`fruitbox-onnx` CLI) |
 | `fruitbox-train` | Training and watch CLIs |
-| `fruitbox-web` | pygbag / WASM web overlay |
+| `fruitbox-web` | pygbag / WASM web overlay (legacy) |
+| `fruitbox-pwa` | PWA: Vite + Pyodide core + onnxruntime-web |
 
 ```bash
 uv sync --extra cpu --all-packages   # install everything (CPU PyTorch)

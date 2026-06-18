@@ -9,7 +9,14 @@ cpu = ["torch"]
 cu128 = ["torch"]
 
 [tool.uv.workspace]
-members = ["packages/*"]
+members = [
+    "packages/fruitbox-core",
+    "packages/fruitbox-pygame",
+    "packages/fruitbox-app-torch",
+    "packages/fruitbox-app-onnx",
+    "packages/fruitbox-train",
+    "packages/fruitbox-web",
+]
 
 [tool.uv.sources]
 fruitbox-app-onnx  = { workspace = true }

@@ -5,8 +5,8 @@ import pygame_gui
 
 from fruitbox_pygame.pygame_ui import FruitBoxPygame, FPS
 from fruitbox_pygame import colors as fruitbox_colors
-from fruitbox import stats as fruitbox_stats
-from fruitbox import config as fruitbox_config
+from fruitbox_pygame import config as fruitbox_config
+from fruitbox_core.models import GameInfo
 
 
 class WebPlay(FruitBoxPygame):
@@ -68,7 +68,7 @@ class WebPlay(FruitBoxPygame):
                                 self.over_reason = "No more valid moves"
                                 self.pause_btn.disable()
                                 if not self._result_recorded:
-                                    fruitbox_stats.record(fruitbox_stats.GameInfo(
+                                    self._stats.record(GameInfo(
                                         gamemode=self.gamemode,
                                         grid_type=self.game.grid_type,
                                         self_score=self.game.score,
@@ -88,7 +88,7 @@ class WebPlay(FruitBoxPygame):
                     self.over_reason = "Time's up!"
                     self.pause_btn.disable()
                     if not self._result_recorded:
-                        fruitbox_stats.record(fruitbox_stats.GameInfo(
+                        self._stats.record(GameInfo(
                             gamemode="single_player",
                             grid_type=self.game.grid_type,
                             self_score=self.game.score,

@@ -24,15 +24,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
 
-      - name: Install build dependencies
-        run: uv sync --extra cpu --group web --all-packages
+      - name: Install Python build dependencies
+        run: uv sync --extra cpu --group build --all-packages
 
-      - name: Build with pygbag
-        run: uv run python tools/build_web.py
+      - name: Build PWA
+        run: uv run python tools/build_pwa.py
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -40,7 +44,7 @@ jobs:
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: src/build/web
+          path: packages/fruitbox-pwa/dist
 
       - name: Deploy to GitHub Pages
         id: deployment

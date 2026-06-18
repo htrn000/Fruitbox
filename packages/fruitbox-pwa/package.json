@@ -1,0 +1,21 @@
+{
+  "name": "fruitbox-pwa",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "onnxruntime-web": "^1.18.0",
+    "sql.js": "^1.12.0"
+  },
+  "devDependencies": {
+    "@types/sql.js": "^1.4.9",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3",
+    "vite-plugin-pwa": "^0.21.1"
+  }
+}

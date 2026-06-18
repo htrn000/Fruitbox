@@ -5,7 +5,7 @@ import pygame_gui
 
 from fruitbox_pygame.vs import FruitBoxVs, FPS, HUD_H, PADDING, BOARD_W, BOARD_H, AI_INTERVAL
 from fruitbox_pygame import colors as fruitbox_colors
-from fruitbox_core import stats as fruitbox_stats
+from fruitbox_core.models import GameInfo
 from fruitbox_pygame import config as fruitbox_config
 from ._common import is_wasm, ONNX_PATH, ONNX_URL, GRID_N
 
@@ -128,7 +128,7 @@ class WebVs(FruitBoxVs):
                     else:       self.over_reason = f"Tie!  {h} – {a}"
                     self.pause_btn.disable()
                     if not self._result_recorded:
-                        fruitbox_stats.record(fruitbox_stats.GameInfo(
+                        self._stats.record(GameInfo(
                             gamemode="vs_ai",
                             grid_type=self.grid_type,
                             self_score=h,
@@ -136,7 +136,7 @@ class WebVs(FruitBoxVs):
                             time_elapsed=time.time() - self._game_start,
                             seed=self.human_game.seed,
                         ))
-                        self.stats = fruitbox_stats.get_vs_stats()
+                        self.stats = self._stats.get_vs_stats()
                         self._result_recorded = True
 
             if self.human_game.paused:
