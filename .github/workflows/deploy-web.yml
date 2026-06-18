@@ -15,6 +15,7 @@ concurrency:
 permissions:
   contents: write
   pull-requests: write
+  actions: write
 
 jobs:
   build-and-deploy:
@@ -59,6 +60,7 @@ jobs:
           preview-branch: gh-pages
           umbrella-dir: pr-preview
           action: ${{ github.event.action == 'closed' && 'remove' || 'deploy' }}
+          wait-for-pages-deployment: false
 
       - name: Deploy production
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
@@ -67,3 +69,52 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: packages/fruitbox-pwa/dist
           keep_files: true
+
+  # The github-pages environment only allows deployments from master. PR workflows
+  # run on the head branch, so dispatch the publish workflow on master instead.
+  publish-preview:
+    needs: build-and-deploy
+    if: >-
+      always() &&
+      needs.build-and-deploy.result == 'success' &&
+      github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish preview via workflow dispatch
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'deploy-pages-sync.yml',
+              ref: 'master',
+            });
+
+  publish-production:
+    needs: build-and-deploy
+    if: >-
+      always() &&
+      needs.build-and-deploy.result == 'success' &&
+      github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

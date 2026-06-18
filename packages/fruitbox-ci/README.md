@@ -36,9 +36,16 @@ GitHub Actions workflows invoke these via `uv run fruitbox-ci <command>`.
 
 ## GitHub Pages
 
-Deploy workflow: `.github/workflows/deploy-web.yml`
+Deploy workflows:
 
-Requires repo **Settings → Pages → Deploy from a branch → `gh-pages`**.
+- `.github/workflows/deploy-web.yml` — build PWA, push to `gh-pages`, publish
+- `.github/workflows/deploy-pages-sync.yml` — publish `gh-pages` via `deploy-pages`
+
+Pages should use **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+
+The `github-pages` environment is limited to the `master` branch. PR previews write to
+`gh-pages` first, then `deploy-web` dispatches `deploy-pages-sync` on `master` so the
+preview is published without widening environment branch policies.
 
 | Trigger | Result |
 |---|---|
