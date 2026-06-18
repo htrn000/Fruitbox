@@ -23,8 +23,13 @@ export class CoreEnv {
 
   static create(runtime: PyodideRuntime, gridType = "random"): CoreEnv {
     const mod = runtime.pyimport("fruitbox_core.env");
-    const FruitBoxEnv = mod.FruitBoxEnv as new (opts?: Record<string, unknown>) => PyProxy;
-    const pyEnv = new FruitBoxEnv({ grid_type: gridType }) as FruitBoxEnvPy;
+    const FruitBoxEnv = mod.FruitBoxEnv as (
+      rows: number,
+      cols: number,
+      dtPerStep: number,
+      gridType: string,
+    ) => PyProxy;
+    const pyEnv = FruitBoxEnv(10, 17, 1.0, gridType) as FruitBoxEnvPy;
     pyEnv.reset();
     return new CoreEnv(pyEnv);
   }

@@ -37,13 +37,18 @@ export class CoreGame {
 
   static create(runtime: PyodideRuntime, opts: CoreGameOptions = {}): CoreGame {
     const mod = runtime.pyimport("fruitbox_core.game");
-    const FruitBoxGame = mod.FruitBoxGame as new (opts?: Record<string, unknown>) => PyProxy;
-    const pyGame = new FruitBoxGame({
-      rows: opts.rows ?? 10,
-      columns: opts.columns ?? 17,
-      time_limit: opts.timeLimit ?? 120,
-      grid_type: opts.gridType ?? "random",
-    });
+    const FruitBoxGame = mod.FruitBoxGame as (
+      rows: number,
+      columns: number,
+      timeLimit: number,
+      gridType: string,
+    ) => PyProxy;
+    const pyGame = FruitBoxGame(
+      opts.rows ?? 10,
+      opts.columns ?? 17,
+      opts.timeLimit ?? 120,
+      opts.gridType ?? "random",
+    );
     return new CoreGame(runtime, pyGame);
   }
 

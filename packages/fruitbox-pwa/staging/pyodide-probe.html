@@ -1,0 +1,90 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Pyodide probe</title>
+  </head>
+  <body>
+    <pre id="log">loading…</pre>
+    <script type="module">
+      const log = (msg) => {
+        const el = document.getElementById("log");
+        el.textContent += `\n${msg}`;
+        console.log(msg);
+      };
+
+      const PYODIDE_CDN = "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/";
+      const BASE = "/Fruitbox/";
+      const wheel = `${BASE}wheels/fruitbox_core-0.1.0-py3-none-any.whl`;
+
+      await import(`${PYODIDE_CDN}pyodide.js`);
+      const pyodide = await loadPyodide({ indexURL: PYODIDE_CDN });
+      await pyodide.loadPackage("numpy");
+      await pyodide.loadPackage("micropip");
+      await pyodide.runPythonAsync(`
+import micropip
+await micropip.install("gymnasium")
+await micropip.install("${wheel}")
+`);
+
+      const mod = pyodide.pyimport("fruitbox_core.game");
+      const FruitBoxGame = mod.FruitBoxGame;
+      log(`FruitBoxGame type: ${typeof FruitBoxGame}`);
+
+      const kwargs = { rows: 10, columns: 17, time_limit: 120, grid_type: "random" };
+
+      try {
+        const gCall = FruitBoxGame(kwargs);
+        log(`FruitBoxGame(kwargs) typeof reset: ${typeof gCall.reset}`);
+        log(`FruitBoxGame(kwargs) reset call: ${!!gCall.reset}`);
+        if (typeof gCall.reset === "function") {
+          gCall.reset(null);
+          log(`FruitBoxGame(kwargs) grid rows: ${gCall.grid.length}`);
+        }
+      } catch (e) {
+        log(`FruitBoxGame(kwargs) error: ${e}`);
+      }
+
+      try {
+        const gNew = new FruitBoxGame(kwargs);
+        log(`new FruitBoxGame(kwargs) typeof reset: ${typeof gNew.reset}`);
+        if (typeof gNew.reset === "function") {
+          gNew.reset(null);
+          log(`new FruitBoxGame(kwargs) grid rows: ${gNew.grid.length}`);
+        }
+      } catch (e) {
+        log(`new FruitBoxGame(kwargs) error: ${e}`);
+      }
+
+      try {
+        const gPos = FruitBoxGame(10, 17, 120, "random");
+        log(`FruitBoxGame(pos) typeof reset: ${typeof gPos.reset}`);
+        if (typeof gPos.reset === "function") {
+          gPos.reset(null);
+          log(`FruitBoxGame(pos) grid rows: ${gPos.grid.length}`);
+        }
+      } catch (e) {
+        log(`FruitBoxGame(pos) error: ${e}`);
+      }
+
+      try {
+        await pyodide.runPythonAsync(`
+from fruitbox_core.game import FruitBoxGame
+_probe_game = FruitBoxGame(rows=10, columns=17, time_limit=120, grid_type='random')
+_probe_game.reset()
+`);
+        const gPy = pyodide.globals.get("_probe_game");
+        log(`runPython game typeof reset: ${typeof gPy.reset}`);
+        if (typeof gPy.reset === "function") {
+          gPy.reset(null);
+          const grid = gPy.grid.toJs({ depth: -1, create_proxies: false });
+          log(`runPython grid shape: ${Array.isArray(grid) ? `${grid.length}x${grid[0]?.length}` : typeof grid}`);
+        }
+      } catch (e) {
+        log(`runPython error: ${e}`);
+      }
+
+      log("done");
+    </script>
+  </body>
+</html>

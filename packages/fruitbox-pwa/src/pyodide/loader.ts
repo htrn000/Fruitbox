@@ -66,10 +66,43 @@ await micropip.install("${wheel}")
 }
 
 export function gridToJs(gridProxy: PyProxy, rows: number, cols: number): number[][] {
+  const tolist = (gridProxy as { tolist?: () => number[][] }).tolist;
+  if (typeof tolist === "function") {
+    const grid = tolist.call(gridProxy);
+    if (grid.length === rows && grid[0]?.length === cols) {
+      return grid;
+    }
+  }
+
   const js = gridProxy.toJs?.({ depth: -1, create_proxies: false });
 
-  if (Array.isArray(js) && js.length > 0 && Array.isArray(js[0])) {
-    return js as number[][];
+  if (Array.isArray(js) && js.length === rows) {
+    const grid: number[][] = [];
+    for (const row of js) {
+      if (Array.isArray(row)) {
+        grid.push(row as number[]);
+        continue;
+      }
+      if (row instanceof Int8Array || row instanceof Int32Array || row instanceof Float64Array) {
+        grid.push(Array.from(row));
+        continue;
+      }
+      if (row && typeof row === "object" && typeof (row as PyProxy).toJs === "function") {
+        const inner = (row as PyProxy).toJs?.({ create_proxies: false });
+        if (Array.isArray(inner)) {
+          grid.push(inner as number[]);
+          continue;
+        }
+        if (inner instanceof Int8Array || inner instanceof Int32Array || inner instanceof Float64Array) {
+          grid.push(Array.from(inner));
+          continue;
+        }
+      }
+      break;
+    }
+    if (grid.length === rows && grid[0]?.length === cols) {
+      return grid;
+    }
   }
 
   const flat: number[] =

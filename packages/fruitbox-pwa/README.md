@@ -35,3 +35,16 @@ npm run dev
 ```
 
 For local dev you still need the wheel and ONNX in `public/` — run `fruitbox-ci build-pwa` once, or copy them manually.
+
+## Staging smoke test
+
+Verifies single-player actually renders the grid in a headless browser (Pyodide + canvas):
+
+```bash
+cd packages/fruitbox-pwa
+npm run staging          # build + preview + smoke test
+# or from repo root:
+uv run fruitbox-ci build-pwa --staging
+```
+
+Requires Playwright Chromium (`npx playwright install chromium` runs automatically via `npm install` devDependency).

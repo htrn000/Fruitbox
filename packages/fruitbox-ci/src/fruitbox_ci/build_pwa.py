@@ -14,9 +14,9 @@ HF_REPO = "Fungster/fruitbox-ppo"
 HF_ONNX_FILE = "fruitbox_policy.onnx"
 
 
-def _run(cmd: list[str], *, cwd: str | None = None) -> None:
+def _run(cmd: list[str], *, cwd: str | None = None, env: dict[str, str] | None = None) -> None:
     print("+", " ".join(cmd))
-    subprocess.run(cmd, check=True, cwd=cwd or str(repo_root()))
+    subprocess.run(cmd, check=True, cwd=cwd or str(repo_root()), env=env)
 
 
 def _ensure_onnx(root: str, pwa: str) -> None:
@@ -85,10 +85,37 @@ def serve() -> None:
     _run(["npm", "run", "preview", "--", "--host"], cwd=pwa)
 
 
+def staging() -> None:
+    """Build, serve locally, and run browser smoke test (single player)."""
+    import time
+
+    pwa = os.path.join(str(repo_root()), "packages", "fruitbox-pwa")
+    build()
+    proc = subprocess.Popen(
+        ["npm", "run", "preview", "--", "--host", "127.0.0.1", "--port", "4173"],
+        cwd=pwa,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        time.sleep(2)
+        env = os.environ.copy()
+        env["STAGING_URL"] = "http://127.0.0.1:4173/Fruitbox/"
+        _run(["node", "staging/smoke.mjs", "app"], cwd=pwa, env=env)
+        print("staging: single-player smoke test passed")
+    finally:
+        proc.terminate()
+        proc.wait(timeout=10)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build fruitbox-pwa for GitHub Pages")
     parser.add_argument("--serve", action="store_true", help="preview after build")
+    parser.add_argument("--staging", action="store_true", help="build + browser smoke test")
     args = parser.parse_args()
+    if args.staging:
+        staging()
+        return
     build()
     if args.serve:
         serve()
