@@ -22,11 +22,38 @@
   <!-- Menu -->
   <div id="screen-menu" class="screen">
     <div class="menu-card">
-      <h1 class="menu-title">Fruit Box</h1>
 
-      <div class="grid-toggle" id="grid-toggle">
-        <button class="grid-btn active" data-type="random">Random</button>
-        <button class="grid-btn" data-type="solvable">Solvable</button>
+      <div class="menu-top">
+        <h1 class="menu-title">Fruit Box</h1>
+        <div class="menu-icons">
+          <button class="icon-btn" id="btn-dark-mode" title="Toggle light/dark">
+            <img class="icon-img" src="./assets/circle.lefthalf.fill.png" alt="">
+          </button>
+          <button class="icon-btn" id="btn-help" title="Help">
+            <img class="icon-img" src="./assets/questionmark.circle.png" alt="">
+          </button>
+          <button class="icon-btn" id="btn-stats-overlay" title="Statistics">
+            <img class="icon-img" src="./assets/waveform.path.ecg.png" alt="">
+          </button>
+          <button class="icon-btn" id="btn-settings-overlay" title="Settings">
+            <img class="icon-img" src="./assets/gearshape.png" alt="">
+          </button>
+        </div>
+      </div>
+
+      <div class="pill-selector">
+        <button class="pill-arrow" id="grid-prev">
+          <img class="icon-img" src="./assets/arrowtriangle.left.fill.png" alt="">
+        </button>
+        <div class="pill-display" id="pill-display">
+          <span id="grid-type-text">Random</span>
+          <button class="pill-gear hidden" id="pill-gear" title="Custom settings">
+            <img class="icon-img pill-gear-icon" src="./assets/gearshape.png" alt="">
+          </button>
+        </div>
+        <button class="pill-arrow" id="grid-next">
+          <img class="icon-img" src="./assets/arrowtriangle.right.fill.png" alt="">
+        </button>
       </div>
 
       <div class="menu-btns">
@@ -38,6 +65,7 @@
       <div class="stats-panel" id="stats-panel">
         <div class="stats-loading">Loading stats…</div>
       </div>
+
     </div>
   </div>
 
@@ -130,6 +158,133 @@
       </div>
     </div>
   </div>
+
+  <!-- ── Overlays ──────────────────────────────────────────────────────────────── -->
+
+  <!-- Settings -->
+  <div id="overlay-settings" class="overlay">
+    <div class="overlay-backdrop" data-close="overlay-settings"></div>
+    <div class="overlay-card">
+      <div class="overlay-header">
+        <div class="overlay-title">Settings</div>
+        <button class="overlay-close" data-close="overlay-settings">×</button>
+      </div>
+      <div class="overlay-divider"></div>
+      <div class="setting-row">
+        <span class="setting-label">PAUSE</span>
+        <button class="key-btn" id="key-btn-pause" data-binding="pause">SPACE</button>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">RESTART</span>
+        <button class="key-btn" id="key-btn-restart" data-binding="restart">R</button>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">MENU</span>
+        <button class="key-btn" id="key-btn-menu" data-binding="menu">ESC</button>
+      </div>
+      <div class="overlay-hint hidden" id="settings-capture-hint">Press any key to bind · ESC to cancel</div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div id="overlay-stats" class="overlay">
+    <div class="overlay-backdrop" data-close="overlay-stats"></div>
+    <div class="overlay-card overlay-card-wide">
+      <!-- Summary view -->
+      <div id="stats-view-main">
+        <div class="overlay-header">
+          <div class="overlay-title">Stats</div>
+          <button class="overlay-close" data-close="overlay-stats">×</button>
+        </div>
+        <div class="overlay-divider"></div>
+        <div id="stats-overlay-content"><div class="stats-loading">Loading…</div></div>
+        <button class="overlay-text-btn" id="btn-stats-history">Full History</button>
+      </div>
+      <!-- History view -->
+      <div id="stats-view-history" class="hidden">
+        <div class="overlay-header">
+          <button class="overlay-back" id="btn-stats-back">← Back</button>
+          <div class="overlay-title">Full History</div>
+          <button class="overlay-close" data-close="overlay-stats">×</button>
+        </div>
+        <div class="overlay-divider"></div>
+        <div class="history-header-row">
+          <span>Mode</span><span>Grid</span><span>Score</span><span>Opp</span><span>Seed</span>
+        </div>
+        <div id="stats-history-list" class="history-list"></div>
+        <div class="overlay-hint">Click a row to copy seed to clipboard</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Help -->
+  <div id="overlay-help" class="overlay">
+    <div class="overlay-backdrop" data-close="overlay-help"></div>
+    <div class="overlay-card">
+      <div class="overlay-header">
+        <div class="overlay-title">Help</div>
+        <button class="overlay-close" data-close="overlay-help">×</button>
+      </div>
+      <div class="overlay-divider"></div>
+      <div class="help-content">
+        <h3>How to play</h3>
+        <p>Drag the mouse to exactly enclose tiles so the numbers sum to 10. You score 1 point per tile cleared.</p>
+        <h3>Grid modes</h3>
+        <p><strong>Random</strong> — randomly generated grid.</p>
+        <p><strong>Solvable</strong> — grid is guaranteed to be fully clearable.</p>
+        <p><strong>Custom</strong> — configure size, time limit, seed, and base type.</p>
+        <h3>Keyboard shortcuts</h3>
+        <div class="help-keys" id="help-keys">
+          <div><span class="key-tag" id="help-key-pause">Space</span> Pause / Resume</div>
+          <div><span class="key-tag" id="help-key-restart">R</span> Restart</div>
+          <div><span class="key-tag" id="help-key-menu">Esc</span> Menu</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom Mode -->
+  <div id="overlay-custom" class="overlay">
+    <div class="overlay-backdrop"></div>
+    <div class="overlay-card">
+      <div class="overlay-header">
+        <div class="overlay-title">Custom Mode</div>
+        <button class="overlay-close" id="custom-close">×</button>
+      </div>
+      <div class="overlay-note">Scores won't count towards best score</div>
+      <div class="overlay-divider"></div>
+      <div class="setting-row">
+        <span class="setting-label">GRID SIZE</span>
+        <div class="custom-size-row">
+          <input class="custom-input" type="number" id="custom-cols" value="17" min="5" max="30">
+          <span class="custom-times">×</span>
+          <input class="custom-input" type="number" id="custom-rows" value="10" min="3" max="20">
+        </div>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">TIME (SEC)</span>
+        <input class="custom-input" type="number" id="custom-time" value="120" min="10" max="3600" style="width:110px">
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">GRID TYPE</span>
+        <div class="custom-seg" id="custom-grid-seg">
+          <button class="custom-seg-btn active" data-val="random">Random</button>
+          <button class="custom-seg-btn" data-val="solvable">Solvable</button>
+        </div>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">SEED</span>
+        <input class="custom-input" type="number" id="custom-seed" placeholder="Random" style="width:160px">
+      </div>
+      <div class="custom-btn-row">
+        <button class="menu-mode-btn secondary" id="custom-reset">Reset to Defaults</button>
+        <button class="menu-mode-btn primary" id="custom-confirm">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast notification -->
+  <div class="toast" id="toast">Copied!</div>
 
   <script src="app.js"></script>
 </body>

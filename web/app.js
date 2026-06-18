@@ -1,55 +1,95 @@
 'use strict';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const ROWS = 10, COLS = 17, N = ROWS * COLS;
-const CELL = 46, GAP = 2, STEP = CELL + GAP;       // single / watch
-const VS_CELL = 36, VS_GAP = 2, VS_STEP = VS_CELL + VS_GAP; // vs mode
-const TIME_LIMIT = 120;
+const DEFAULT_ROWS = 10, DEFAULT_COLS = 17;
+const CELL = 46, GAP = 2;
+const VS_CELL = 36, VS_GAP = 2;
+const DEFAULT_TIME = 120;
 const AI_INTERVAL_MS = 480;
 const ONNX_URL = './fruitbox_policy.onnx';
 
-// Dark-theme colours matching the desktop app
-const C = {
-  bg:          '#161614',
-  cellBg:      '#262522',
-  cellBorder:  '#3a3834',
-  cleared:     '#1e1e1b',
-  text:        '#dcdad4',
-  textDim:     '#82807a',
-  selFill:     'rgba(80,150,230,0.23)',
-  selBorder:   '#5096e6',
-  validFill:   'rgba(29,158,117,0.25)',
-  validBorder: '#1d9e75',
-  badFill:     'rgba(226,75,74,0.23)',
-  badBorder:   '#c84646',
-  aiSel:       'rgba(180,100,240,0.35)',
-  aiBorder:    '#b064f0',
+// ── Theme ─────────────────────────────────────────────────────────────────────
+const THEME_COLORS = {
+  dark: {
+    bg: '#161614', cellBg: '#262522', cellBorder: '#3a3834', cleared: '#1e1e1b',
+    text: '#dcdad4', textDim: '#82807a',
+    selFill: 'rgba(80,150,230,0.23)',   selBorder: '#5096e6',
+    validFill: 'rgba(29,158,117,0.25)', validBorder: '#1d9e75',
+    badFill: 'rgba(226,75,74,0.23)',    badBorder: '#c84646',
+    aiSel: 'rgba(180,100,240,0.35)',    aiBorder: '#b064f0',
+  },
+  light: {
+    bg: '#f5f4ef', cellBg: '#e2e1db', cellBorder: '#c8c7c0', cleared: '#d8d7d2',
+    text: '#1c1b18', textDim: '#6e6c65',
+    selFill: 'rgba(24,101,190,0.15)',   selBorder: '#1865be',
+    validFill: 'rgba(15,110,75,0.18)',  validBorder: '#0f7850',
+    badFill: 'rgba(180,50,50,0.15)',    badBorder: '#b83232',
+    aiSel: 'rgba(120,50,200,0.25)',     aiBorder: '#8032c8',
+  },
 };
 
-// ── State ─────────────────────────────────────────────────────────────────────
-let pyodide = null, onnxSession = null, opfsMount = null;
-let selectedGridType = 'random';
+let C = { ...THEME_COLORS.dark };
+let darkMode = localStorage.getItem('darkMode') !== '0';
 
-// per-mode game state
+function applyTheme(dark) {
+  darkMode = dark;
+  C = { ...THEME_COLORS[dark ? 'dark' : 'light'] };
+  document.documentElement.dataset.theme = dark ? '' : 'light';
+  localStorage.setItem('darkMode', dark ? '1' : '0');
+}
+
+// ── Keybindings ───────────────────────────────────────────────────────────────
+const KEY_DEFAULTS = { pause: 'Space', restart: 'KeyR', menu: 'Escape' };
+let keybinds = { ...KEY_DEFAULTS };
+
+function loadSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('keybinds') || '{}');
+    keybinds = { ...KEY_DEFAULTS, ...saved };
+  } catch { keybinds = { ...KEY_DEFAULTS }; }
+}
+
+function saveSettings() {
+  localStorage.setItem('keybinds', JSON.stringify(keybinds));
+}
+
+function keyCodeDisplay(code) {
+  if (code === 'Space')  return 'SPACE';
+  if (code === 'Escape') return 'ESC';
+  if (code.startsWith('Key'))   return code.slice(3);
+  if (code.startsWith('Digit')) return code.slice(5);
+  return code;
+}
+
+// ── Custom mode state ─────────────────────────────────────────────────────────
+const CUSTOM_DEFAULTS = { rows: 10, cols: 17, timeLimit: 120, seed: null, gridBase: 'random' };
+let customSettings = { ...CUSTOM_DEFAULTS };
+
+// ── Grid-type pill state ──────────────────────────────────────────────────────
+const GRID_TYPES = ['random', 'solvable', 'custom'];
+let gridTypeIdx = 0;
+
+function selectedGridType() { return GRID_TYPES[gridTypeIdx]; }
+
+// ── Game state ────────────────────────────────────────────────────────────────
+let pyodide = null, onnxSession = null, opfsMount = null;
+
+let playRows = DEFAULT_ROWS, playCols = DEFAULT_COLS, playTimeLimit = DEFAULT_TIME;
 let playGrid = null, playScore = 0, playTimeRemaining = 0;
-let playGameOver = false, playTimedOut = false;
-let playGameSeed = null, playGameStart = 0;
-let playPaused = false;
+let playGameOver = false, playPaused = false;
+let playGameSeed = null, playGameStart = 0, playIsCustom = false;
 
 let vsHumanGrid = null, vsAiGrid = null;
 let vsHumanScore = 0, vsAiScore = 0, vsTimeRemaining = 0;
 let vsHumanOver = false, vsAiOver = false, vsGameOver = false;
 let vsGameSeed = null, vsGameStart = 0, vsPaused = false;
-let lastAiMoveTs = 0, aiHighlight = null; // {r1,c1,r2,c2,until}
+let lastAiMoveTs = 0, aiHighlight = null;
 
 let watchGrid = null, watchScore = 0, watchTimeRemaining = 0;
 let watchOver = false, watchGameStart = 0;
 let lastWatchAiTs = 0, watchHighlight = null;
 
-// drag selection
 let dragStart = null, dragEnd = null;
-
-// animation
 let animId = null, lastTs = null;
 
 // ── DOM helpers ───────────────────────────────────────────────────────────────
@@ -66,42 +106,74 @@ const fmt = secs => {
   const m = Math.floor(secs / 60), s = Math.floor(secs % 60);
   return `${m}:${String(s).padStart(2, '0')}`;
 };
+const fmtTime = secs => {
+  if (secs < 60)   return secs + 's';
+  if (secs < 3600) { const m = Math.floor(secs/60), s = secs%60; return s ? `${m}m ${s}s` : `${m}m`; }
+  const h = Math.floor(secs/3600), m = Math.floor((secs%3600)/60); return `${h}h ${m}m`;
+};
 const showOver = (id, cls) => {
-  const el = $(id);
-  el.classList.add('show');
+  const el = $(id); el.classList.add('show');
   const card = el.querySelector('.over-card');
   card.className = 'over-card ' + (cls || '');
 };
 const hideOver = id => $(id).classList.remove('show');
 
+let toastTimer = null;
+function showToast(msg = 'Copied!') {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 1500);
+}
+
+// ── Overlay management ────────────────────────────────────────────────────────
+function openOverlay(id) {
+  closeAllOverlays();
+  $(id).classList.add('visible');
+}
+function closeOverlay(id) { $(id).classList.remove('visible'); }
+function closeAllOverlays() {
+  document.querySelectorAll('.overlay.visible').forEach(o => o.classList.remove('visible'));
+}
+function anyOverlayOpen() {
+  return !!document.querySelector('.overlay.visible');
+}
+
 // ── Python helpers string ─────────────────────────────────────────────────────
 const PYTHON_HELPERS = `
-import sys
+import sys, json as _json
 import numpy as np
 from fruitbox_core.game import FruitBoxGame
 from fruitbox_core.env import FruitBoxEnv
 import fruitbox_core.stats as _stats
 
 _play = None
+_play_time_limit = 120
 _vs_human = None
 _vs_env = None
 _watch_env = None
 
 # ── single player ─────────────────────────────────────────────────────────────
-def play_init(grid_type, seed=None):
-    global _play
-    _play = FruitBoxGame(grid_type=grid_type)
+def play_init(grid_type, seed=None, rows=10, cols=17, time_limit=120):
+    global _play, _play_time_limit
+    _play_time_limit = int(time_limit)
+    _play = FruitBoxGame(rows=int(rows), columns=int(cols),
+                         grid_type=str(grid_type), time_limit=_play_time_limit)
     _play.reset(None if seed is None else int(seed))
 
-def play_grid():    return _play.grid.flatten().tolist()
-def play_tick(dt):  return bool(_play.tick(float(dt)))
-def play_score():   return int(_play.score)
-def play_time():    return float(_play.time_remaining)
-def play_seed():    return int(_play.seed)
-def play_elapsed(): return float(_play.elapsed)
-def play_paused():  return bool(_play.paused)
-def play_pause():   _play.pause()
-def play_resume():  _play.resume()
+def play_grid():       return _play.grid.flatten().tolist()
+def play_tick(dt):     return bool(_play.tick(float(dt)))
+def play_score():      return int(_play.score)
+def play_time():       return float(_play.time_remaining)
+def play_seed():       return int(_play.seed)
+def play_elapsed():    return float(_play.elapsed)
+def play_paused():     return bool(_play.paused)
+def play_pause():      _play.pause()
+def play_resume():     _play.resume()
+def play_rows():       return int(_play.grid.shape[0])
+def play_cols():       return int(_play.grid.shape[1])
+def play_time_limit(): return _play_time_limit
 
 def play_validate(r1, c1, r2, c2):
     return bool(_play.validate_move(int(r1),int(c1),int(r2),int(c2)))
@@ -145,10 +217,7 @@ def vs_human_apply(r1, c1, r2, c2):
 
 def vs_ai_inputs():
     obs = _vs_env._obs()
-    return {
-        'grid':  obs['grid'].astype(np.float32).tolist(),
-        'score': float(obs['score'][0]),
-    }
+    return {'grid': obs['grid'].astype(np.float32).tolist(), 'score': float(obs['score'][0])}
 
 def vs_ai_valid_moves():
     return [list(m) for m in _vs_env.game.get_valid_moves()]
@@ -178,10 +247,7 @@ def watch_tick(dt):
 
 def watch_inputs():
     obs = _watch_env._obs()
-    return {
-        'grid':  obs['grid'].astype(np.float32).tolist(),
-        'score': float(obs['score'][0]),
-    }
+    return {'grid': obs['grid'].astype(np.float32).tolist(), 'score': float(obs['score'][0])}
 
 def watch_valid_moves():
     return [list(m) for m in _watch_env.game.get_valid_moves()]
@@ -203,8 +269,11 @@ def stats_record(gamemode, grid_type, self_score, seed, time_elapsed, opp_score=
         opp_score=int(opp_score) if opp_score is not None else None,
     ))
 
-def stats_summary():
-    return dict(_stats.get_summary())
+def stats_summary_json():
+    return _json.dumps(_stats.get_summary())
+
+def stats_history_json():
+    return _json.dumps(_stats.get_history())
 `;
 
 // ── Pyodide init ──────────────────────────────────────────────────────────────
@@ -235,7 +304,6 @@ async function mountOPFS() {
     const opfsRoot = await navigator.storage.getDirectory();
     const dir = await opfsRoot.getDirectoryHandle('fruitbox', { create: true });
     opfsMount = await pyodide.mountNativeFS('/fruitbox', dir);
-    // Patch stats path to OPFS location
     await pyodide.runPythonAsync(`
 import fruitbox_core.stats as _s
 _s._PATH = "/fruitbox/fruitbox_stats.db"
@@ -253,7 +321,6 @@ async function loadFruitboxCore() {
     if (!r.ok) return;
     pyodide.FS.writeFile(`/home/pyodide/fruitbox_core/${f}`, await r.text());
   }));
-  // /home/pyodide is already on sys.path in Pyodide
 }
 
 async function loadOnnx() {
@@ -267,8 +334,7 @@ async function syncStats() {
   }
 }
 
-// ── py() helper ──────────────────────────────────────────────────────────────
-// Call a Python function by name, returning a JS value (auto-converts PyProxy).
+// ── py() helper ───────────────────────────────────────────────────────────────
 function py(name, ...args) {
   const result = pyodide.globals.get(name)(...args);
   if (result && typeof result.toJs === 'function') {
@@ -281,22 +347,19 @@ function py(name, ...args) {
 
 // ── ONNX inference ────────────────────────────────────────────────────────────
 async function onnxStep(inputs, validMoves) {
-  const gridData   = new Float32Array(inputs.grid);
-  const scoreData  = new Float32Array([inputs.score]);
-  const gridTensor  = new ort.Tensor('float32', gridData,  [1, N]);
-  const scoreTensor = new ort.Tensor('float32', scoreData, [1, 1]);
-
-  const results = await onnxSession.run({ grid: gridTensor, score: scoreTensor });
-  const logits  = results.logits.data; // Float32Array of length N*N
-
-  // Build masked logit array — start all at -inf, unmask valid moves
+  const N = DEFAULT_ROWS * DEFAULT_COLS;
+  const gridData  = new Float32Array(inputs.grid);
+  const scoreData = new Float32Array([inputs.score]);
+  const results = await onnxSession.run({
+    grid:  new ort.Tensor('float32', gridData,  [1, N]),
+    score: new ort.Tensor('float32', scoreData, [1, 1]),
+  });
+  const logits = results.logits.data;
   const masked = new Float32Array(N * N).fill(-1e9);
   for (const [r1, c1, r2, c2] of validMoves) {
-    const a = (r1 * COLS + c1) * N + (r2 * COLS + c2);
+    const a = (r1 * DEFAULT_COLS + c1) * N + (r2 * DEFAULT_COLS + c2);
     masked[a] = logits[a];
   }
-
-  // Argmax
   let best = 0, bestVal = -Infinity;
   for (let i = 0; i < masked.length; i++) {
     if (masked[i] > bestVal) { bestVal = masked[i]; best = i; }
@@ -305,23 +368,20 @@ async function onnxStep(inputs, validMoves) {
 }
 
 // ── Canvas rendering ──────────────────────────────────────────────────────────
-function setupCanvas(canvas, cellSize, gap) {
+function setupCanvas(canvas, rows, cols, cellSize, gap) {
   const step = cellSize + gap;
-  const w = step * COLS - gap, h = step * ROWS - gap;
-  canvas.width  = w;
-  canvas.height = h;
+  const w = step * cols - gap, h = step * rows - gap;
+  canvas.width = w; canvas.height = h;
   return { step, w, h };
 }
 
-function pixelToCell(canvas, px, py, cellSize, gap) {
+function pixelToCell(canvas, px, py_, cellSize, gap, rows, cols) {
   const step = cellSize + gap;
   const rect = canvas.getBoundingClientRect();
-  const scaleX = canvas.width / rect.width;
-  const scaleY = canvas.height / rect.height;
-  const x = (px - rect.left) * scaleX;
-  const y = (py - rect.top) * scaleY;
+  const x = (px - rect.left) * (canvas.width / rect.width);
+  const y = (py_ - rect.top)  * (canvas.height / rect.height);
   const c = Math.floor(x / step), r = Math.floor(y / step);
-  if (r >= 0 && r < ROWS && c >= 0 && c < COLS) return [r, c];
+  if (r >= 0 && r < rows && c >= 0 && c < cols) return [r, c];
   return null;
 }
 
@@ -331,11 +391,8 @@ function selBounds(a, b) {
           Math.max(a[0],b[0]), Math.max(a[1],b[1])];
 }
 
-function drawBoard(canvas, grid, cellSize, gap, {
-  drag    = null,  // [r1,c1,r2,c2] current drag selection
-  validDrag = null, // true/false/null
-  aiSel   = null,  // [r1,c1,r2,c2] AI's last move highlight
-  paused  = false,
+function drawBoard(canvas, grid, rows, cols, cellSize, gap, {
+  drag = null, validDrag = null, aiSel = null, paused = false,
 } = {}) {
   if (!grid) return;
   const ctx  = canvas.getContext('2d');
@@ -349,11 +406,10 @@ function drawBoard(canvas, grid, cellSize, gap, {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  for (let r = 0; r < ROWS; r++) {
-    for (let c = 0; c < COLS; c++) {
-      const v = grid[r * COLS + c];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const v = grid[r * cols + c];
       const x = c * step, y = r * step;
-
       if (v === -1) {
         ctx.fillStyle = C.cleared;
         ctx.fillRect(x, y, cellSize, cellSize);
@@ -369,47 +425,38 @@ function drawBoard(canvas, grid, cellSize, gap, {
     }
   }
 
-  // AI selection highlight
   if (aiSel) {
     const [r1,c1,r2,c2] = aiSel;
-    const sx = c1 * step, sy = r1 * step;
-    const sw = (c2 - c1) * step + cellSize, sh = (r2 - r1) * step + cellSize;
-    ctx.fillStyle = C.aiSel;
-    ctx.fillRect(sx, sy, sw, sh);
-    ctx.strokeStyle = C.aiBorder;
-    ctx.lineWidth = 2;
-    ctx.strokeRect(sx + 1, sy + 1, sw - 2, sh - 2);
+    const sx = c1*step, sy = r1*step;
+    const sw = (c2-c1)*step+cellSize, sh = (r2-r1)*step+cellSize;
+    ctx.fillStyle = C.aiSel;   ctx.fillRect(sx, sy, sw, sh);
+    ctx.strokeStyle = C.aiBorder; ctx.lineWidth = 2;
+    ctx.strokeRect(sx+1, sy+1, sw-2, sh-2);
   }
 
-  // Drag selection
   if (drag) {
     const [r1,c1,r2,c2] = drag;
-    const sx = c1 * step, sy = r1 * step;
-    const sw = (c2 - c1) * step + cellSize, sh = (r2 - r1) * step + cellSize;
-    ctx.fillStyle   = validDrag === true  ? C.validFill
-                    : validDrag === false ? C.badFill
-                    : C.selFill;
-    ctx.strokeStyle = validDrag === true  ? C.validBorder
-                    : validDrag === false ? C.badBorder
-                    : C.selBorder;
+    const sx = c1*step, sy = r1*step;
+    const sw = (c2-c1)*step+cellSize, sh = (r2-r1)*step+cellSize;
+    ctx.fillStyle   = validDrag === true  ? C.validFill  : validDrag === false ? C.badFill  : C.selFill;
+    ctx.strokeStyle = validDrag === true  ? C.validBorder: validDrag === false ? C.badBorder: C.selBorder;
     ctx.fillRect(sx, sy, sw, sh);
     ctx.lineWidth = 2;
-    ctx.strokeRect(sx + 1, sy + 1, sw - 2, sh - 2);
+    ctx.strokeRect(sx+1, sy+1, sw-2, sh-2);
   }
 
-  // Paused overlay
   if (paused) {
     ctx.fillStyle = 'rgba(0,0,0,0.45)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = C.text;
     ctx.font = `700 ${cellSize}px system-ui, sans-serif`;
-    ctx.fillText('PAUSED', canvas.width / 2, canvas.height / 2);
+    ctx.fillText('PAUSED', canvas.width/2, canvas.height/2);
   }
 }
 
-// ── Timer bar helper ──────────────────────────────────────────────────────────
-function updateTimerBar(barId, remaining) {
-  const pct = Math.max(0, remaining / TIME_LIMIT * 100);
+// ── Timer bar ─────────────────────────────────────────────────────────────────
+function updateTimerBar(barId, remaining, timeLimit) {
+  const pct = Math.max(0, remaining / timeLimit * 100);
   const bar = $(barId);
   bar.style.width = pct + '%';
   bar.style.background =
@@ -418,21 +465,30 @@ function updateTimerBar(barId, remaining) {
 }
 
 // ── Single player ─────────────────────────────────────────────────────────────
-function startPlay(gridType, seed) {
-  py('play_init', gridType, seed ?? null);
+function startPlay(gridType, opts = {}) {
+  const rows      = opts.rows      ?? DEFAULT_ROWS;
+  const cols      = opts.cols      ?? DEFAULT_COLS;
+  playTimeLimit   = opts.timeLimit ?? DEFAULT_TIME;
+  const seed      = opts.seed      ?? null;
+  playIsCustom    = opts.isCustom  ?? false;
+
+  py('play_init', gridType, seed, rows, cols, playTimeLimit);
+  playRows = py('play_rows');
+  playCols = py('play_cols');
+  playTimeLimit = py('play_time_limit');
   playGrid = py('play_grid');
-  playScore = 0; playTimeRemaining = TIME_LIMIT;
-  playGameOver = false; playTimedOut = false; playPaused = false;
+  playScore = 0; playTimeRemaining = playTimeLimit;
+  playGameOver = false; playPaused = false;
   playGameSeed = py('play_seed');
   playGameStart = performance.now();
   dragStart = null; dragEnd = null;
 
   const canvas = $('canvas-play');
-  setupCanvas(canvas, CELL, GAP);
+  setupCanvas(canvas, playRows, playCols, CELL, GAP);
   hideOver('play-over');
   $('play-score').textContent = '0';
-  $('play-timer').textContent = fmt(TIME_LIMIT);
-  updateTimerBar('play-timerbar', TIME_LIMIT);
+  $('play-timer').textContent = fmt(playTimeLimit);
+  updateTimerBar('play-timerbar', playTimeLimit, playTimeLimit);
 
   showScreen('screen-play');
   lastTs = null;
@@ -451,23 +507,20 @@ function playLoop(ts) {
     const timedOut = py('play_tick', dt);
     playTimeRemaining = py('play_time');
     playScore = py('play_score');
-    if (timedOut) { playTimedOut = true; endPlay('Time\'s up!'); return; }
+    if (timedOut) { endPlay("Time's up!"); return; }
   }
 
   playGrid = py('play_grid');
-
   const bounds = selBounds(dragStart, dragEnd);
   let isValid = null;
   if (bounds) isValid = py('play_validate', ...bounds);
 
-  const canvas = $('canvas-play');
-  drawBoard(canvas, playGrid, CELL, GAP, {
-    drag: bounds, validDrag: isValid, paused: playPaused,
-  });
+  drawBoard($('canvas-play'), playGrid, playRows, playCols, CELL, GAP,
+    { drag: bounds, validDrag: isValid, paused: playPaused });
 
   $('play-score').textContent = playScore;
   $('play-timer').textContent = fmt(playTimeRemaining);
-  updateTimerBar('play-timerbar', playTimeRemaining);
+  updateTimerBar('play-timerbar', playTimeRemaining, playTimeLimit);
 
   animId = requestAnimationFrame(playLoop);
 }
@@ -475,13 +528,12 @@ function playLoop(ts) {
 function endPlay(reason) {
   playGameOver = true;
   if (animId) { cancelAnimationFrame(animId); animId = null; }
-
   $('play-over-reason').textContent = reason;
   $('play-over-score').textContent = playScore;
   showOver('play-over', '');
-
   try {
-    py('stats_record', 'single_player', selectedGridType,
+    const gamemode = playIsCustom ? 'custom' : 'single_player';
+    py('stats_record', gamemode, selectedGridType() === 'custom' ? customSettings.gridBase : selectedGridType(),
       playScore, playGameSeed, (performance.now() - playGameStart) / 1000);
     syncStats();
   } catch(e) { console.warn('stats_record failed', e); }
@@ -490,16 +542,16 @@ function endPlay(reason) {
 function setupPlayInput() {
   const canvas = $('canvas-play');
   canvas.addEventListener('mousedown', e => {
-    if (playGameOver || playPaused) return;
-    const cell = pixelToCell(canvas, e.clientX, e.clientY, CELL, GAP);
+    if (playGameOver || playPaused || anyOverlayOpen()) return;
+    const cell = pixelToCell(canvas, e.clientX, e.clientY, CELL, GAP, playRows, playCols);
     if (cell) { dragStart = cell; dragEnd = cell; }
   });
   canvas.addEventListener('mousemove', e => {
     if (!dragStart || playGameOver || playPaused) return;
-    const cell = pixelToCell(canvas, e.clientX, e.clientY, CELL, GAP);
+    const cell = pixelToCell(canvas, e.clientX, e.clientY, CELL, GAP, playRows, playCols);
     if (cell) dragEnd = cell;
   });
-  canvas.addEventListener('mouseup', e => {
+  canvas.addEventListener('mouseup', () => {
     if (!dragStart || playGameOver || playPaused) return;
     const bounds = selBounds(dragStart, dragEnd);
     if (bounds) {
@@ -515,35 +567,36 @@ function setupPlayInput() {
     if (playPaused) { py('play_resume'); playPaused = false; $('play-pause').textContent = '⏸'; lastTs = null; }
     else            { py('play_pause');  playPaused = true;  $('play-pause').textContent = '▶'; }
   };
-  $('play-restart').onclick = () => { cancelAnimationFrame(animId); startPlay(selectedGridType); };
-  $('play-back').onclick    = () => { cancelAnimationFrame(animId); showMenu(); };
-  $('play-over-again').onclick = () => startPlay(selectedGridType);
-  $('play-over-menu').onclick  = () => { showMenu(); };
+  $('play-restart').onclick = () => {
+    cancelAnimationFrame(animId);
+    startPlay(selectedGridType() === 'custom' ? customSettings.gridBase : selectedGridType(),
+      selectedGridType() === 'custom' ? { ...customSettings, isCustom: true } : {});
+  };
+  $('play-back').onclick = () => { cancelAnimationFrame(animId); showMenu(); };
+  $('play-over-again').onclick = () => $('play-restart').onclick();
+  $('play-over-menu').onclick  = () => showMenu();
 }
 
 // ── VS AI ─────────────────────────────────────────────────────────────────────
-function startVs(gridType, seed) {
-  py('vs_init', gridType, seed ?? null);
+function startVs(gridType, seed = null) {
+  py('vs_init', gridType, seed);
   vsHumanGrid = py('vs_human_grid');
   vsAiGrid    = py('vs_ai_grid');
-  vsHumanScore = 0; vsAiScore = 0; vsTimeRemaining = TIME_LIMIT;
+  vsHumanScore = 0; vsAiScore = 0; vsTimeRemaining = DEFAULT_TIME;
   vsHumanOver = false; vsAiOver = false; vsGameOver = false; vsPaused = false;
   vsGameSeed  = py('vs_seed');
   vsGameStart = performance.now();
   dragStart = null; dragEnd = null;
-  lastAiMoveTs = performance.now() + 800; // brief delay before AI starts
+  lastAiMoveTs = performance.now() + 800;
   aiHighlight = null;
 
-  const humanC = $('canvas-human');
-  const aiC    = $('canvas-ai-board');
-  setupCanvas(humanC, VS_CELL, VS_GAP);
-  setupCanvas(aiC,    VS_CELL, VS_GAP);
-
+  setupCanvas($('canvas-human'),   DEFAULT_ROWS, DEFAULT_COLS, VS_CELL, VS_GAP);
+  setupCanvas($('canvas-ai-board'),DEFAULT_ROWS, DEFAULT_COLS, VS_CELL, VS_GAP);
   hideOver('vs-over');
   $('vs-human-score').textContent = '0';
   $('vs-ai-score').textContent = '0';
-  $('vs-timer').textContent = fmt(TIME_LIMIT);
-  updateTimerBar('vs-timerbar', TIME_LIMIT);
+  $('vs-timer').textContent = fmt(DEFAULT_TIME);
+  updateTimerBar('vs-timerbar', DEFAULT_TIME, DEFAULT_TIME);
 
   showScreen('screen-vs');
   lastTs = null;
@@ -566,8 +619,6 @@ function vsLoop(ts) {
       vsAiScore    = py('vs_ai_score');
       if (timedOut) { vsHumanOver = true; vsAiOver = true; }
     }
-
-    // AI move
     if (!vsAiOver && ts >= lastAiMoveTs) {
       lastAiMoveTs = ts + AI_INTERVAL_MS;
       runVsAiStep();
@@ -583,19 +634,17 @@ function vsLoop(ts) {
   let isValid = null;
   if (bounds && !vsHumanOver) isValid = py('vs_human_validate', ...bounds);
 
-  const humanC = $('canvas-human');
-  const aiC    = $('canvas-ai-board');
-  drawBoard(humanC, vsHumanGrid, VS_CELL, VS_GAP, { drag: bounds, validDrag: isValid, paused: vsPaused });
-  drawBoard(aiC,    vsAiGrid,    VS_CELL, VS_GAP, { aiSel: aiHighlight ? [aiHighlight.r1, aiHighlight.c1, aiHighlight.r2, aiHighlight.c2] : null });
+  drawBoard($('canvas-human'),   vsHumanGrid, DEFAULT_ROWS, DEFAULT_COLS, VS_CELL, VS_GAP,
+    { drag: bounds, validDrag: isValid, paused: vsPaused });
+  drawBoard($('canvas-ai-board'), vsAiGrid,   DEFAULT_ROWS, DEFAULT_COLS, VS_CELL, VS_GAP,
+    { aiSel: aiHighlight ? [aiHighlight.r1,aiHighlight.c1,aiHighlight.r2,aiHighlight.c2] : null });
 
   $('vs-human-score').textContent = vsHumanScore;
   $('vs-ai-score').textContent    = vsAiScore;
   $('vs-timer').textContent       = fmt(vsTimeRemaining);
-  updateTimerBar('vs-timerbar', vsTimeRemaining);
+  updateTimerBar('vs-timerbar', vsTimeRemaining, DEFAULT_TIME);
 
-  if ((vsHumanOver && vsAiOver) || vsTimeRemaining <= 0) {
-    endVs(); return;
-  }
+  if ((vsHumanOver && vsAiOver) || vsTimeRemaining <= 0) { endVs(); return; }
 
   animId = requestAnimationFrame(vsLoop);
 }
@@ -607,11 +656,10 @@ async function runVsAiStep() {
     const validMoves = validMovesProxy.toJs();
     validMovesProxy.destroy();
     if (!validMoves || validMoves.length === 0) { vsAiOver = true; return; }
-
     const action = await onnxStep(inputs, validMoves);
-    const move   = py('vs_ai_decode', action);
+    const move = py('vs_ai_decode', action);
     const [, noMoves] = py('vs_ai_apply', ...move);
-    aiHighlight = { r1: move[0], c1: move[1], r2: move[2], c2: move[3], until: performance.now() + 250 };
+    aiHighlight = { r1:move[0], c1:move[1], r2:move[2], c2:move[3], until: performance.now() + 250 };
     if (noMoves) vsAiOver = true;
   } catch(e) { console.error('AI step error', e); }
 }
@@ -619,21 +667,18 @@ async function runVsAiStep() {
 function endVs() {
   vsGameOver = true;
   if (animId) { cancelAnimationFrame(animId); animId = null; }
-
   const h = vsHumanScore, a = vsAiScore;
   let reason, cls;
-  if      (h > a) { reason = `You win!  ${h} – ${a}`; cls = 'win'; }
-  else if (a > h) { reason = `AI wins!  ${h} – ${a}`; cls = 'lose'; }
-  else            { reason = `Tie!  ${h} – ${a}`;      cls = 'tie'; }
-
-  $('vs-over-reason').textContent  = reason;
-  $('vs-over-human').textContent   = h;
-  $('vs-over-ai').textContent      = a;
+  if      (h > a) { reason = `You win!  ${h} – ${a}`;  cls = 'win'; }
+  else if (a > h) { reason = `AI wins!  ${h} – ${a}`;  cls = 'lose'; }
+  else            { reason = `Tie!  ${h} – ${a}`;       cls = 'tie'; }
+  $('vs-over-reason').textContent = reason;
+  $('vs-over-human').textContent  = h;
+  $('vs-over-ai').textContent     = a;
   showOver('vs-over', cls);
-
   try {
-    py('stats_record', 'vs_ai', selectedGridType,
-      h, vsGameSeed, (performance.now() - vsGameStart) / 1000, a);
+    const gt = selectedGridType() === 'custom' ? customSettings.gridBase : selectedGridType();
+    py('stats_record', 'vs_ai', gt, h, vsGameSeed, (performance.now() - vsGameStart) / 1000, a);
     syncStats();
   } catch(e) { console.warn('stats_record failed', e); }
 }
@@ -641,13 +686,13 @@ function endVs() {
 function setupVsInput() {
   const canvas = $('canvas-human');
   canvas.addEventListener('mousedown', e => {
-    if (vsGameOver || vsHumanOver || vsPaused) return;
-    const cell = pixelToCell(canvas, e.clientX, e.clientY, VS_CELL, VS_GAP);
+    if (vsGameOver || vsHumanOver || vsPaused || anyOverlayOpen()) return;
+    const cell = pixelToCell(canvas, e.clientX, e.clientY, VS_CELL, VS_GAP, DEFAULT_ROWS, DEFAULT_COLS);
     if (cell) { dragStart = cell; dragEnd = cell; }
   });
   canvas.addEventListener('mousemove', e => {
     if (!dragStart || vsGameOver || vsHumanOver || vsPaused) return;
-    const cell = pixelToCell(canvas, e.clientX, e.clientY, VS_CELL, VS_GAP);
+    const cell = pixelToCell(canvas, e.clientX, e.clientY, VS_CELL, VS_GAP, DEFAULT_ROWS, DEFAULT_COLS);
     if (cell) dragEnd = cell;
   });
   canvas.addEventListener('mouseup', () => {
@@ -661,32 +706,35 @@ function setupVsInput() {
   });
   canvas.addEventListener('mouseleave', () => { dragStart = null; dragEnd = null; });
 
-  $('vs-pause').onclick   = () => {
+  $('vs-pause').onclick = () => {
     if (vsGameOver) return;
     if (vsPaused) { py('vs_resume'); vsPaused = false; $('vs-pause').textContent = '⏸'; lastTs = null; }
     else          { py('vs_pause');  vsPaused = true;  $('vs-pause').textContent = '▶'; }
   };
-  $('vs-restart').onclick  = () => { cancelAnimationFrame(animId); startVs(selectedGridType); };
-  $('vs-back').onclick     = () => { cancelAnimationFrame(animId); showMenu(); };
-  $('vs-over-again').onclick = () => startVs(selectedGridType);
+  $('vs-restart').onclick  = () => {
+    cancelAnimationFrame(animId);
+    const gt = selectedGridType() === 'custom' ? customSettings.gridBase : selectedGridType();
+    startVs(gt);
+  };
+  $('vs-back').onclick       = () => { cancelAnimationFrame(animId); showMenu(); };
+  $('vs-over-again').onclick = () => $('vs-restart').onclick();
   $('vs-over-menu').onclick  = () => showMenu();
 }
 
 // ── Watch AI ──────────────────────────────────────────────────────────────────
-function startWatch(gridType, seed) {
-  py('watch_init', gridType, seed ?? null);
+function startWatch(gridType, seed = null) {
+  py('watch_init', gridType, seed);
   watchGrid = py('watch_grid');
-  watchScore = 0; watchTimeRemaining = TIME_LIMIT; watchOver = false;
+  watchScore = 0; watchTimeRemaining = DEFAULT_TIME; watchOver = false;
   watchGameStart = performance.now();
   lastWatchAiTs = performance.now() + 600;
   watchHighlight = null;
 
-  const canvas = $('canvas-watch');
-  setupCanvas(canvas, CELL, GAP);
+  setupCanvas($('canvas-watch'), DEFAULT_ROWS, DEFAULT_COLS, CELL, GAP);
   hideOver('watch-over');
   $('watch-score').textContent = '0';
-  $('watch-timer').textContent = fmt(TIME_LIMIT);
-  updateTimerBar('watch-timerbar', TIME_LIMIT);
+  $('watch-timer').textContent = fmt(DEFAULT_TIME);
+  updateTimerBar('watch-timerbar', DEFAULT_TIME, DEFAULT_TIME);
 
   showScreen('screen-watch');
   lastTs = null;
@@ -713,16 +761,15 @@ function watchLoop(ts) {
   if (watchHighlight && ts > watchHighlight.until) watchHighlight = null;
 
   watchGrid = py('watch_grid');
-  const canvas = $('canvas-watch');
-  drawBoard(canvas, watchGrid, CELL, GAP, {
-    aiSel: watchHighlight ? [watchHighlight.r1, watchHighlight.c1, watchHighlight.r2, watchHighlight.c2] : null,
+  drawBoard($('canvas-watch'), watchGrid, DEFAULT_ROWS, DEFAULT_COLS, CELL, GAP, {
+    aiSel: watchHighlight ? [watchHighlight.r1,watchHighlight.c1,watchHighlight.r2,watchHighlight.c2] : null,
   });
 
   $('watch-score').textContent = watchScore;
   $('watch-timer').textContent = fmt(watchTimeRemaining);
-  updateTimerBar('watch-timerbar', watchTimeRemaining);
+  updateTimerBar('watch-timerbar', watchTimeRemaining, DEFAULT_TIME);
 
-  if (timedOut) { endWatch('Time\'s up!'); return; }
+  if (timedOut) { endWatch("Time's up!"); return; }
 
   animId = requestAnimationFrame(watchLoop);
 }
@@ -734,12 +781,11 @@ async function runWatchAiStep() {
     const validMoves = validMovesProxy.toJs();
     validMovesProxy.destroy();
     if (!validMoves || validMoves.length === 0) { endWatch('No more moves'); return; }
-
     const action = await onnxStep(inputs, validMoves);
     const move   = py('watch_decode', action);
     const [, noMoves] = py('watch_apply', ...move);
-    watchHighlight = { r1: move[0], c1: move[1], r2: move[2], c2: move[3], until: performance.now() + 300 };
-    if (noMoves) { endWatch('No more moves'); }
+    watchHighlight = { r1:move[0], c1:move[1], r2:move[2], c2:move[3], until: performance.now() + 300 };
+    if (noMoves) endWatch('No more moves');
   } catch(e) { console.error('Watch AI step error', e); }
 }
 
@@ -751,51 +797,325 @@ function endWatch(reason) {
 }
 
 function setupWatchInput() {
-  $('watch-restart').onclick    = () => { cancelAnimationFrame(animId); startWatch(selectedGridType); };
+  $('watch-restart').onclick    = () => {
+    cancelAnimationFrame(animId);
+    const gt = selectedGridType() === 'custom' ? customSettings.gridBase : selectedGridType();
+    startWatch(gt);
+  };
   $('watch-back').onclick       = () => { cancelAnimationFrame(animId); showMenu(); };
-  $('watch-over-again').onclick = () => startWatch(selectedGridType);
+  $('watch-over-again').onclick = () => $('watch-restart').onclick();
   $('watch-over-menu').onclick  = () => showMenu();
+}
+
+// ── Settings overlay ──────────────────────────────────────────────────────────
+let waitingForBinding = null;
+
+function openSettings() {
+  waitingForBinding = null;
+  updateKeyBtns();
+  $('settings-capture-hint').classList.add('hidden');
+  openOverlay('overlay-settings');
+}
+
+function updateKeyBtns() {
+  ['pause','restart','menu'].forEach(k => {
+    const btn = $(`key-btn-${k}`);
+    btn.textContent = keyCodeDisplay(keybinds[k]);
+    btn.classList.remove('waiting');
+  });
+  // also update help overlay keys
+  $('help-key-pause').textContent   = keyCodeDisplay(keybinds.pause);
+  $('help-key-restart').textContent = keyCodeDisplay(keybinds.restart);
+  $('help-key-menu').textContent    = keyCodeDisplay(keybinds.menu);
+}
+
+function setupSettingsOverlay() {
+  document.querySelectorAll('[data-binding]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (waitingForBinding === btn.dataset.binding) {
+        waitingForBinding = null;
+        btn.classList.remove('waiting');
+        $('settings-capture-hint').classList.add('hidden');
+        return;
+      }
+      // clear any existing wait
+      document.querySelectorAll('.key-btn.waiting').forEach(b => b.classList.remove('waiting'));
+      waitingForBinding = btn.dataset.binding;
+      btn.textContent = '…';
+      btn.classList.add('waiting');
+      $('settings-capture-hint').classList.remove('hidden');
+    });
+  });
+}
+
+// ── Stats overlay ─────────────────────────────────────────────────────────────
+let statsGridFilter = 'random';
+let statsHistory = [];
+let statsSelectedRow = null;
+
+function openStats() {
+  $('stats-view-main').classList.remove('hidden');
+  $('stats-view-history').classList.add('hidden');
+  loadStatsOverlay();
+  openOverlay('overlay-stats');
+}
+
+function loadStatsOverlay() {
+  try {
+    const s = JSON.parse(py('stats_summary_json'));
+    renderStatsSummary(s);
+  } catch(e) {
+    $('stats-overlay-content').innerHTML = '<div class="stats-loading">Stats unavailable</div>';
+  }
+}
+
+function renderStatsSummary(s) {
+  const totalGames = s.total_games || 0;
+  if (!totalGames) {
+    $('stats-overlay-content').innerHTML = '<div class="stats-loading" style="padding:16px 0">No games yet</div>';
+    return;
+  }
+  const timeStr = fmtTime(s.total_time || 0);
+  const score     = statsGridFilter === 'random' ? s.random_best     : s.solvable_best;
+  const seed      = statsGridFilter === 'random' ? s.random_best_seed: s.solvable_best_seed;
+  const bestTime  = statsGridFilter === 'random' ? s.random_best_time: s.solvable_best_time;
+
+  const scoreStr = score != null ? String(score) : '—';
+  const timeScore = bestTime != null ? `  •  ${Math.round(bestTime)}s` : '';
+  const seedHtml = seed != null
+    ? `<button class="seed-copy-btn" id="seed-copy-btn" title="Copy seed">Seed: ${seed}</button>`
+    : '';
+
+  $('stats-overlay-content').innerHTML = `
+    <div class="stats-ov-section">
+      <div class="stats-ov-row">
+        <span class="stats-ov-label">Games Played</span>
+        <span class="stats-ov-val">${s.total_games}</span>
+      </div>
+      <div class="stats-ov-row">
+        <span class="stats-ov-label">Time Played</span>
+        <span class="stats-ov-val">${timeStr}</span>
+      </div>
+    </div>
+    <div class="stats-ov-divider"></div>
+    <div class="stats-ov-section">
+      <div class="stats-ov-row">
+        <span class="stats-ov-label">VS AI Record</span>
+        <span class="stats-ov-val">${s.vs_wins}W &nbsp;${s.vs_losses}L &nbsp;${s.vs_ties}T</span>
+      </div>
+    </div>
+    <div class="stats-ov-divider"></div>
+    <div class="stats-ov-section">
+      <div class="stats-filter-row">
+        <span class="stats-filter-label">Best Score</span>
+        <button class="stats-filter-btn ${statsGridFilter==='random'?'active':''}" data-filter="random">Random</button>
+        <button class="stats-filter-btn ${statsGridFilter==='solvable'?'active':''}" data-filter="solvable">Solvable</button>
+      </div>
+      <div class="stats-ov-row" style="padding-top:4px">
+        <span class="stats-ov-val">${scoreStr}${timeScore ? `<span style="font-size:14px;font-weight:400;color:var(--text-dim)">${timeScore}</span>` : ''}</span>
+      </div>
+      <div class="stats-ov-sub">${seedHtml}</div>
+    </div>`;
+
+  // filter buttons
+  $('stats-overlay-content').querySelectorAll('[data-filter]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      statsGridFilter = btn.dataset.filter;
+      loadStatsOverlay();
+    });
+  });
+
+  // seed copy
+  const seedBtn = $('seed-copy-btn');
+  if (seedBtn) {
+    seedBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(String(seed)).then(() => showToast('Seed copied!'));
+    });
+  }
+}
+
+function openStatsHistory() {
+  statsHistory = JSON.parse(py('stats_history_json'));
+  statsSelectedRow = null;
+  renderHistory();
+  $('stats-view-main').classList.add('hidden');
+  $('stats-view-history').classList.remove('hidden');
+}
+
+function renderHistory() {
+  const list = $('stats-history-list');
+  const MODE = { single_player:'Single', vs_ai:'VS AI', watch_ai:'Watch', custom:'Custom' };
+  list.innerHTML = statsHistory.slice(0, 50).map((g, i) => {
+    const mode  = MODE[g.gamemode] ?? g.gamemode;
+    const grid  = g.grid_type ? (g.grid_type[0].toUpperCase() + g.grid_type.slice(1)) : '—';
+    const opp   = g.opp_score != null ? String(g.opp_score) : '—';
+    const seed  = g.seed != null ? String(g.seed) : '—';
+    const sel   = statsSelectedRow === i ? ' selected' : '';
+    return `<div class="history-row${sel}" data-idx="${i}">
+      <span>${mode}</span><span>${grid}</span><span>${g.self_score}</span>
+      <span class="history-opp">${opp}</span><span class="history-seed">${seed}</span>
+    </div>`;
+  }).join('');
+
+  list.querySelectorAll('.history-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const idx = parseInt(row.dataset.idx);
+      statsSelectedRow = idx;
+      const seed = statsHistory[idx]?.seed;
+      if (seed != null) {
+        navigator.clipboard.writeText(String(seed)).then(() => showToast('Seed copied!'));
+      }
+      renderHistory();
+    });
+  });
+}
+
+function setupStatsOverlay() {
+  $('btn-stats-history').addEventListener('click', openStatsHistory);
+  $('btn-stats-back').addEventListener('click', () => {
+    $('stats-view-history').classList.add('hidden');
+    $('stats-view-main').classList.remove('hidden');
+    loadStatsOverlay();
+  });
+}
+
+// ── Custom overlay ────────────────────────────────────────────────────────────
+function openCustom() {
+  // populate form from current customSettings
+  $('custom-cols').value = customSettings.cols;
+  $('custom-rows').value = customSettings.rows;
+  $('custom-time').value = customSettings.timeLimit;
+  $('custom-seed').value = customSettings.seed ?? '';
+  $('custom-grid-seg').querySelectorAll('.custom-seg-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.val === customSettings.gridBase);
+  });
+  openOverlay('overlay-custom');
+}
+
+function readCustomForm() {
+  const cols  = Math.max(5,  Math.min(30,  parseInt($('custom-cols').value) || 17));
+  const rows  = Math.max(3,  Math.min(20,  parseInt($('custom-rows').value) || 10));
+  const time  = Math.max(10, Math.min(3600,parseInt($('custom-time').value) || 120));
+  const seedV = parseInt($('custom-seed').value);
+  const seed  = isNaN(seedV) ? null : seedV;
+  const base  = $('custom-grid-seg').querySelector('.custom-seg-btn.active')?.dataset.val ?? 'random';
+  return { cols, rows, timeLimit: time, seed, gridBase: base };
+}
+
+function setupCustomOverlay() {
+  $('custom-grid-seg').addEventListener('click', e => {
+    const btn = e.target.closest('.custom-seg-btn');
+    if (!btn) return;
+    $('custom-grid-seg').querySelectorAll('.custom-seg-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+  $('custom-reset').addEventListener('click', () => {
+    customSettings = { ...CUSTOM_DEFAULTS };
+    $('custom-cols').value = customSettings.cols;
+    $('custom-rows').value = customSettings.rows;
+    $('custom-time').value = customSettings.timeLimit;
+    $('custom-seed').value = '';
+    $('custom-grid-seg').querySelectorAll('.custom-seg-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.val === customSettings.gridBase);
+    });
+  });
+  $('custom-confirm').addEventListener('click', () => {
+    customSettings = readCustomForm();
+    closeOverlay('overlay-custom');
+  });
+  $('custom-close').addEventListener('click', () => closeOverlay('overlay-custom'));
+  // backdrop doesn't auto-close for custom (to avoid accidental dismiss)
+  $('overlay-custom').querySelector('.overlay-backdrop').addEventListener('click', () => closeOverlay('overlay-custom'));
+}
+
+// ── Pill selector ─────────────────────────────────────────────────────────────
+function updatePill() {
+  const gt = selectedGridType();
+  const labels = { random: 'Random', solvable: 'Solvable', custom: 'Custom' };
+  $('grid-type-text').textContent = labels[gt];
+  $('pill-gear').classList.toggle('hidden', gt !== 'custom');
+  // disable vs AI for custom (AI requires 10×17)
+  $('btn-vs').disabled = (gt === 'custom');
+}
+
+function setupMenuInput() {
+  $('grid-prev').addEventListener('click', () => {
+    gridTypeIdx = (gridTypeIdx - 1 + GRID_TYPES.length) % GRID_TYPES.length;
+    updatePill();
+  });
+  $('grid-next').addEventListener('click', () => {
+    gridTypeIdx = (gridTypeIdx + 1) % GRID_TYPES.length;
+    updatePill();
+  });
+  $('pill-gear').addEventListener('click', e => {
+    e.stopPropagation();
+    openCustom();
+  });
+
+  $('btn-play').onclick = () => {
+    if (selectedGridType() === 'custom') {
+      startPlay(customSettings.gridBase, { ...customSettings, isCustom: true });
+    } else {
+      startPlay(selectedGridType());
+    }
+  };
+  $('btn-vs').onclick = () => {
+    const gt = selectedGridType() === 'custom' ? customSettings.gridBase : selectedGridType();
+    startVs(gt);
+  };
+  $('btn-watch').onclick = () => {
+    const gt = selectedGridType() === 'custom' ? customSettings.gridBase : selectedGridType();
+    startWatch(gt);
+  };
+
+  // overlay open buttons
+  $('btn-settings-overlay').onclick = openSettings;
+  $('btn-stats-overlay').onclick    = openStats;
+  $('btn-help').onclick             = () => openOverlay('overlay-help');
+  $('btn-dark-mode').onclick        = () => applyTheme(!darkMode);
+
+  // close by backdrop or × button
+  document.querySelectorAll('[data-close]').forEach(el => {
+    el.addEventListener('click', () => closeOverlay(el.dataset.close));
+  });
 }
 
 // ── Menu ──────────────────────────────────────────────────────────────────────
 async function showMenu() {
   dragStart = null; dragEnd = null;
+  closeAllOverlays();
   showScreen('screen-menu');
+  updatePill();
   await refreshStats();
 }
 
 async function refreshStats() {
   try {
-    const s = py('stats_summary');
-    if (!s) return;
-
-    const totalGames = s.get ? s.get('total_games') : s.total_games;
+    const s = JSON.parse(py('stats_summary_json'));
+    const totalGames = s.total_games || 0;
     if (!totalGames) { $('stats-panel').innerHTML = '<div class="stats-loading">No games yet</div>'; return; }
-
-    const get = k => (s.get ? s.get(k) : s[k]) ?? '—';
-    const totalTime = Math.round(get('total_time'));
+    const totalTime = s.total_time || 0;
     const h = Math.floor(totalTime / 3600), m = Math.floor((totalTime % 3600) / 60);
-
     $('stats-panel').innerHTML = `
       <div class="stats-grid">
         <div class="stats-section">
           <div class="stats-section-title">Overall</div>
-          <div class="stats-row"><span>Games played</span><span class="stats-val">${get('total_games')}</span></div>
-          <div class="stats-row"><span>Time played</span><span class="stats-val">${h}h ${m}m</span></div>
+          <div class="stats-row"><span>Games</span><span class="stats-val">${s.total_games}</span></div>
+          <div class="stats-row"><span>Time</span><span class="stats-val">${h}h ${m}m</span></div>
         </div>
         <div class="stats-section">
-          <div class="stats-section-title">vs AI</div>
-          <div class="stats-row"><span>Wins</span><span class="stats-val">${get('vs_wins')}</span></div>
-          <div class="stats-row"><span>Losses</span><span class="stats-val">${get('vs_losses')}</span></div>
-          <div class="stats-row"><span>Ties</span><span class="stats-val">${get('vs_ties')}</span></div>
+          <div class="stats-section-title">VS AI</div>
+          <div class="stats-row"><span>Wins</span><span class="stats-val">${s.vs_wins}</span></div>
+          <div class="stats-row"><span>Losses</span><span class="stats-val">${s.vs_losses}</span></div>
+          <div class="stats-row"><span>Ties</span><span class="stats-val">${s.vs_ties}</span></div>
         </div>
         <div class="stats-section">
           <div class="stats-section-title">Best (Random)</div>
-          <div class="stats-row"><span>Score</span><span class="stats-val">${get('random_best') ?? '—'}</span></div>
+          <div class="stats-row"><span>Score</span><span class="stats-val">${s.random_best ?? '—'}</span></div>
         </div>
         <div class="stats-section">
           <div class="stats-section-title">Best (Solvable)</div>
-          <div class="stats-row"><span>Score</span><span class="stats-val">${get('solvable_best') ?? '—'}</span></div>
+          <div class="stats-row"><span>Score</span><span class="stats-val">${s.solvable_best ?? '—'}</span></div>
         </div>
       </div>`;
   } catch(e) {
@@ -803,26 +1123,69 @@ async function refreshStats() {
   }
 }
 
-function setupMenuInput() {
-  $('grid-toggle').addEventListener('click', e => {
-    const btn = e.target.closest('.grid-btn');
-    if (!btn) return;
-    document.querySelectorAll('.grid-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    selectedGridType = btn.dataset.type;
+// ── Global keyboard handler ───────────────────────────────────────────────────
+function setupKeyboard() {
+  document.addEventListener('keydown', e => {
+    const tag = e.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+    // Settings binding capture
+    if (waitingForBinding) {
+      if (e.code !== 'Escape') {
+        keybinds[waitingForBinding] = e.code;
+        saveSettings();
+        updateKeyBtns();
+      }
+      waitingForBinding = null;
+      document.querySelectorAll('.key-btn.waiting').forEach(b => b.classList.remove('waiting'));
+      $('settings-capture-hint').classList.add('hidden');
+      e.preventDefault();
+      return;
+    }
+
+    // Close overlay with Escape
+    if (e.code === 'Escape' && anyOverlayOpen()) {
+      closeAllOverlays();
+      e.preventDefault();
+      return;
+    }
+
+    if (anyOverlayOpen()) return;
+
+    // Game shortcuts
+    const screen = document.querySelector('.screen.active')?.id;
+    const k = e.code;
+
+    if (screen === 'screen-play') {
+      if (k === keybinds.pause)   { $('play-pause').click();   e.preventDefault(); }
+      else if (k === keybinds.restart) { $('play-restart').click(); e.preventDefault(); }
+      else if (k === keybinds.menu)    { $('play-back').click();    e.preventDefault(); }
+    } else if (screen === 'screen-vs') {
+      if (k === keybinds.pause)   { $('vs-pause').click();   e.preventDefault(); }
+      else if (k === keybinds.restart) { $('vs-restart').click(); e.preventDefault(); }
+      else if (k === keybinds.menu)    { $('vs-back').click();    e.preventDefault(); }
+    } else if (screen === 'screen-watch') {
+      if (k === keybinds.restart) { $('watch-restart').click(); e.preventDefault(); }
+      else if (k === keybinds.menu)    { $('watch-back').click();    e.preventDefault(); }
+    }
   });
-  $('btn-play').onclick  = () => startPlay(selectedGridType);
-  $('btn-vs').onclick    = () => startVs(selectedGridType);
-  $('btn-watch').onclick = () => startWatch(selectedGridType);
 }
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 async function init() {
+  loadSettings();
+  applyTheme(darkMode);
+  updateKeyBtns();
+
   showScreen('screen-loading');
   setupMenuInput();
   setupPlayInput();
   setupVsInput();
   setupWatchInput();
+  setupSettingsOverlay();
+  setupStatsOverlay();
+  setupCustomOverlay();
+  setupKeyboard();
 
   try {
     await initPyodide();
