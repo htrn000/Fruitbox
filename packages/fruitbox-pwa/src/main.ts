@@ -1,4 +1,3 @@
-import { preloadOnnxModel } from "./ai/onnx-agent";
 import { initPyodide } from "./pyodide/loader";
 import { SqliteStatsStore } from "./stats/stats-sqlite";
 import { App } from "./ui/app";
@@ -22,18 +21,12 @@ async function requestPersistentStorage(): Promise<void> {
 }
 
 async function bootstrap(): Promise<void> {
-  setLoadingStatus("Preloading AI model…", 10);
-  const onnxPromise = preloadOnnxModel((msg) => setLoadingStatus(msg, 25));
-
-  setLoadingStatus("Loading stats…", 35);
+  setLoadingStatus("Loading stats…", 20);
   await requestPersistentStorage();
   const stats = await SqliteStatsStore.create();
 
-  setLoadingStatus("Loading Python runtime…", 50);
+  setLoadingStatus("Loading Python runtime…", 45);
   const pyodide = await initPyodide((msg) => setLoadingStatus(msg, 70));
-
-  setLoadingStatus("Waiting for AI model…", 85);
-  await onnxPromise;
 
   setLoadingStatus("Ready", 100);
   const appRoot = document.getElementById("app");

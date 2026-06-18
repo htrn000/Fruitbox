@@ -65,9 +65,29 @@ await micropip.install("${wheel}")
   return pyodidePromise;
 }
 
-export function gridToJs(gridProxy: PyProxy): number[][] {
-  const flat = gridProxy.toJs?.({ create_proxies: false }) as number[][];
-  return flat;
+export function gridToJs(gridProxy: PyProxy, rows: number, cols: number): number[][] {
+  const js = gridProxy.toJs?.({ depth: -1, create_proxies: false });
+
+  if (Array.isArray(js) && js.length > 0 && Array.isArray(js[0])) {
+    return js as number[][];
+  }
+
+  const flat: number[] =
+    js instanceof Int8Array || js instanceof Int32Array || js instanceof Float64Array
+      ? Array.from(js)
+      : Array.isArray(js)
+        ? (js as number[])
+        : [];
+
+  if (flat.length === rows * cols) {
+    const grid: number[][] = [];
+    for (let row = 0; row < rows; row++) {
+      grid.push(flat.slice(row * cols, (row + 1) * cols));
+    }
+    return grid;
+  }
+
+  throw new Error(`Unexpected grid shape: ${flat.length} values for ${rows}x${cols}`);
 }
 
 export function ndarrayToFloat32(arrProxy: PyProxy): Float32Array {

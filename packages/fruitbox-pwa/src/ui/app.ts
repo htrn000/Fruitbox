@@ -60,8 +60,29 @@ export class App {
     }
 
     if (action === "vs_ai") {
-      this.stage.innerHTML = `<p class="loading-inline">Loading AI…</p>`;
-      this.active = await VsScreen.create(this.stage, this.runtime, this.stats, gridType, () => this.showMenu());
+      const loading = document.createElement("p");
+      loading.className = "loading-inline";
+      loading.textContent = "Loading AI model…";
+      this.stage.replaceChildren(loading);
+
+      try {
+        this.active = await VsScreen.create(
+          this.stage,
+          this.runtime,
+          this.stats,
+          gridType,
+          () => this.showMenu(),
+          (msg) => {
+            loading.textContent = msg;
+          },
+        );
+      } catch (err) {
+        this.stage.innerHTML = `
+          <p class="loading-inline error-inline">Failed to load AI model: ${String(err)}</p>
+          <button type="button" class="menu-btn" data-action="back">Back to menu</button>
+        `;
+        this.stage.querySelector('[data-action="back"]')!.addEventListener("click", () => this.showMenu());
+      }
     }
   }
 }

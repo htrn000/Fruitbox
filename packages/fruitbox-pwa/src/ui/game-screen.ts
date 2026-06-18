@@ -13,6 +13,7 @@ import {
   selectionBounds,
   type Cell,
 } from "../game/canvas";
+import { mountCanvas } from "./canvas-host";
 
 function rectContains(rect: DOMRect, x: number, y: number): boolean {
   return x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height;
@@ -39,6 +40,7 @@ export class GameScreen {
 
   private restartRect: DOMRect | null = null;
   private closeRect: DOMRect | null = null;
+  private canvasCleanup: (() => void) | null = null;
 
   constructor(
     root: HTMLElement,
@@ -58,7 +60,6 @@ export class GameScreen {
     this.canvas.width = w;
     this.canvas.height = h;
     this.ctx = this.canvas.getContext("2d")!;
-    root.replaceChildren(this.canvas);
 
     const toolbar = document.createElement("div");
     toolbar.className = "game-toolbar";
@@ -67,7 +68,9 @@ export class GameScreen {
       <button type="button" data-action="pause">Pause</button>
       <button type="button" data-action="restart">Restart</button>
     `;
-    root.prepend(toolbar);
+    const { wrapper, cleanup } = mountCanvas(this.canvas, w, h);
+    this.canvasCleanup = cleanup;
+    root.replaceChildren(toolbar, wrapper);
     toolbar.querySelector('[data-action="menu"]')!.addEventListener("click", () => this.onMenu());
     toolbar.querySelector('[data-action="pause"]')!.addEventListener("click", () => this.togglePause());
     toolbar.querySelector('[data-action="restart"]')!.addEventListener("click", () => this.restart());
@@ -80,9 +83,23 @@ export class GameScreen {
   }
 
   private bindInput(): void {
-    this.canvas.addEventListener("pointerdown", (e) => this.onPointerDown(e));
+    this.canvas.addEventListener("pointerdown", (e) => {
+      try {
+        this.canvas.setPointerCapture(e.pointerId);
+      } catch {
+        /* optional */
+      }
+      this.onPointerDown(e);
+    });
     this.canvas.addEventListener("pointermove", (e) => this.onPointerMove(e));
-    this.canvas.addEventListener("pointerup", () => this.onPointerUp());
+    this.canvas.addEventListener("pointerup", (e) => {
+      try {
+        this.canvas.releasePointerCapture(e.pointerId);
+      } catch {
+        /* optional */
+      }
+      this.onPointerUp();
+    });
     window.addEventListener("keydown", (e) => {
       if (e.key === "Escape") this.onMenu();
       if (e.key === "r" || e.key === "R") this.restart();
@@ -222,6 +239,7 @@ export class GameScreen {
 
   destroy(): void {
     cancelAnimationFrame(this.raf);
+    this.canvasCleanup?.();
     this.game.destroy();
   }
 }

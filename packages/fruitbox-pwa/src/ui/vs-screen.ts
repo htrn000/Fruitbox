@@ -24,6 +24,7 @@ import {
   type BoardLayout,
   type Cell,
 } from "../game/canvas";
+import { mountCanvas } from "./canvas-host";
 
 function rectContains(rect: DOMRect, x: number, y: number): boolean {
   return x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height;
@@ -62,6 +63,7 @@ export class VsScreen {
   private lastTs = 0;
   private restartRect: DOMRect | null = null;
   private closeRect: DOMRect | null = null;
+  private canvasCleanup: (() => void) | null = null;
 
   private humanLayout: BoardLayout = {
     cell: VS_CELL,
@@ -109,7 +111,9 @@ export class VsScreen {
       <button type="button" data-action="restart">Restart</button>
       <button type="button" data-action="toggle-ai">Show AI</button>
     `;
-    root.replaceChildren(toolbar, this.canvas);
+    const { wrapper, cleanup } = mountCanvas(this.canvas, VS_WIN_W, VS_WIN_H, { scrollable: true });
+    this.canvasCleanup = cleanup;
+    root.replaceChildren(toolbar, wrapper);
     toolbar.querySelector('[data-action="menu"]')!.addEventListener("click", () => this.onMenu());
     toolbar.querySelector('[data-action="pause"]')!.addEventListener("click", () => this.togglePause());
     toolbar.querySelector('[data-action="restart"]')!.addEventListener("click", () => this.reset());
@@ -129,18 +133,33 @@ export class VsScreen {
     stats: StatsStore,
     gridType: string,
     onMenu: () => void,
+    onProgress?: (msg: string) => void,
   ): Promise<VsScreen> {
     const human = CoreGame.create(runtime, { gridType });
     const aiEnv = CoreEnv.create(runtime, gridType);
     const ai = CoreGame.fromProxy(runtime, aiEnv.game);
-    const agent = await OnnxAgent.create();
+    const agent = await OnnxAgent.create(onProgress);
     return new VsScreen(root, human, ai, aiEnv, agent, stats, gridType, onMenu);
   }
 
   private bindInput(): void {
-    this.canvas.addEventListener("pointerdown", (e) => this.onPointerDown(e));
+    this.canvas.addEventListener("pointerdown", (e) => {
+      try {
+        this.canvas.setPointerCapture(e.pointerId);
+      } catch {
+        /* optional */
+      }
+      this.onPointerDown(e);
+    });
     this.canvas.addEventListener("pointermove", (e) => this.onPointerMove(e));
-    this.canvas.addEventListener("pointerup", () => this.onPointerUp());
+    this.canvas.addEventListener("pointerup", (e) => {
+      try {
+        this.canvas.releasePointerCapture(e.pointerId);
+      } catch {
+        /* optional */
+      }
+      this.onPointerUp();
+    });
     window.addEventListener("keydown", (e) => {
       if (e.key === "Escape") this.onMenu();
       if (e.key === "r" || e.key === "R") this.reset();
@@ -361,6 +380,7 @@ export class VsScreen {
 
   destroy(): void {
     cancelAnimationFrame(this.raf);
+    this.canvasCleanup?.();
     this.human.destroy();
     this.aiEnv.destroy();
   }

@@ -5,6 +5,9 @@ const base = process.env.VITE_BASE ?? "/Fruitbox/";
 
 export default defineConfig({
   base,
+  resolve: {
+    conditions: ["onnxruntime-web-use-extern-wasm", "import", "module", "browser", "default"],
+  },
   plugins: [
     VitePWA({
       registerType: "autoUpdate",
@@ -31,7 +34,7 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ["**/*.{js,css,html,ico,png,whl}"],
+        globPatterns: ["**/*.{js,css,html,ico,png,whl,wasm,mjs}"],
         maximumFileSizeToCacheInBytes: 30 * 1024 * 1024,
         runtimeCaching: [
           {

@@ -108,7 +108,7 @@ export class CoreGame {
   }
 
   grid(): number[][] {
-    return gridToJs(this.py.grid as PyProxy);
+    return gridToJs(this.py.grid as PyProxy, this.rows, this.columns);
   }
 
   syncElapsed(seconds: number): void {
