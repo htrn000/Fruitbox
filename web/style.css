@@ -110,21 +110,23 @@ html, body {
 
 /* ── Menu screen ────────────────────────────────────────────────────────────── */
 .menu-card {
+  position: relative;
   display: flex; flex-direction: column; align-items: center; gap: 20px;
   padding: 28px 40px 32px;
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 16px;
   min-width: 420px;
+  height: 500px;
 }
 
 .menu-top {
-  display: flex; align-items: center; justify-content: space-between;
-  width: 100%;
+  position: absolute; top: 12px; right: 12px;
+  display: flex; align-items: center;
 }
 
 .menu-title {
-  font-size: 32px; font-weight: 700; letter-spacing: -0.5px;
+  font-size: 48px; font-weight: 700; letter-spacing: -0.5px;
 }
 
 .menu-icons {
@@ -185,7 +187,18 @@ html, body {
 .pill-gear:hover { background: rgba(128,128,128,0.2); }
 
 /* ── Menu buttons ───────────────────────────────────────────────────────────── */
-.menu-btns { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+.menu-btns { display: flex; flex-direction: column; gap: 10px; width: 100%; margin: auto 0; }
+.menu-btn-row { display: flex; gap: 10px; width: 100%; }
+.menu-btn-row .menu-mode-btn { flex: 1; }
+
+.menu-demo-btn {
+  align-self: flex-end;
+  background: var(--btn-bg); border: 1px solid var(--btn-border);
+  border-radius: 8px; cursor: pointer;
+  font-size: 13px; font-weight: 500; color: var(--text-dim);
+  padding: 6px 14px;
+}
+.menu-demo-btn:hover { background: var(--btn-border); color: var(--text); }
 
 .menu-mode-btn {
   width: 100%; padding: 13px 0; border-radius: 10px; border: 1px solid;
@@ -201,20 +214,6 @@ html, body {
 .menu-mode-btn.secondary:hover { background: var(--btn-border); }
 .menu-mode-btn:disabled { opacity: 0.4; cursor: not-allowed; filter: none; }
 
-/* Stats panel */
-.stats-panel {
-  width: 100%; border-top: 1px solid var(--card-border); padding-top: 16px;
-  font-size: 13px; color: var(--text-dim);
-}
-.stats-loading { text-align: center; }
-.stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; }
-.stats-row { display: flex; justify-content: space-between; }
-.stats-val { color: var(--text); font-weight: 600; }
-.stats-section { margin-bottom: 4px; }
-.stats-section-title {
-  font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
-  color: var(--text-dim); margin-bottom: 6px;
-}
 
 /* ── Game wrap / HUD ────────────────────────────────────────────────────────── */
 .game-wrap {
