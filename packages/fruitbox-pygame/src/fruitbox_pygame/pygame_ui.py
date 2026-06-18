@@ -3,7 +3,8 @@ import pygame_gui
 import sys
 import time
 import os
-from fruitbox_core import stats as fruitbox_stats
+from fruitbox_core.models import GameInfo
+from .stats_sqlite import get_default_stats_store
 from . import config as fruitbox_config
 from . import colors as fruitbox_colors
 from fruitbox_core.game import FruitBoxGame
@@ -90,7 +91,8 @@ def draw_rounded_rect_border(surf, color, rect, width=1, radius=8):
 
 
 class FruitBoxPygame:
-    def __init__(self, game=None, screen=None, gamemode="single_player", restart_seed=None):
+    def __init__(self, game=None, screen=None, gamemode="single_player", restart_seed=None, stats_store=None):
+        self._stats = stats_store if stats_store is not None else get_default_stats_store()
         self.game         = game if game is not None else FruitBoxGame()
         self.gamemode     = gamemode
         self._restart_seed = restart_seed
@@ -369,7 +371,7 @@ class FruitBoxPygame:
                                 self.over_reason = "No more valid moves"
                                 self.pause_btn.disable()
                                 if not self._result_recorded:
-                                    fruitbox_stats.record(fruitbox_stats.GameInfo(
+                                    self._stats.record(GameInfo(
                                         gamemode=self.gamemode,
                                         grid_type=self.game.grid_type,
                                         self_score=self.game.score,
@@ -389,7 +391,7 @@ class FruitBoxPygame:
                     self.over_reason = "Time's up!"
                     self.pause_btn.disable()
                     if not self._result_recorded:
-                        fruitbox_stats.record(fruitbox_stats.GameInfo(
+                        self._stats.record(GameInfo(
                             gamemode="single_player",
                             grid_type=self.game.grid_type,
                             self_score=self.game.score,

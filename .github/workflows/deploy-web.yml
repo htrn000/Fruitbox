@@ -3,45 +3,118 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [master, main]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, closed]
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
+# Production and each PR preview deploy independently.
 concurrency:
-  group: pages
+  group: pages-${{ github.event_name == 'pull_request' && format('preview-{0}', github.event.pull_request.number) || 'production' }}
   cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
 
 jobs:
   build-and-deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
+    # Skip draft PRs (until marked ready). Always run on close to clean up previews.
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.draft == false ||
+      github.event.action == 'closed'
 
     steps:
       - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
 
-      - name: Install build dependencies
-        run: uv sync --extra cpu --group web --all-packages
+      - name: Validate CI install commands
+        if: github.event.action != 'closed'
+        run: uv run --package fruitbox-ci fruitbox-ci validate-ci
 
-      - name: Build with pygbag
-        run: uv run python tools/build_web.py
+      - name: Build PWA
+        if: github.event.action != 'closed'
+        env:
+          VITE_BASE: >-
+            ${{ github.event_name == 'pull_request'
+                && format('/Fruitbox/pr-preview/pr-{0}/', github.event.pull_request.number)
+                || '/Fruitbox/' }}
+        run: uv run fruitbox-ci build-pwa
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Deploy PR preview
+        if: github.event_name == 'pull_request'
+        uses: rossjrw/pr-preview-action@v1
         with:
-          path: src/build/web
+          source-dir: packages/fruitbox-pwa/dist
+          preview-branch: gh-pages
+          umbrella-dir: pr-preview
+          action: ${{ github.event.action == 'closed' && 'remove' || 'deploy' }}
+          wait-for-pages-deployment: false
 
-      - name: Deploy to GitHub Pages
-        id: deployment
+      - name: Deploy production
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: packages/fruitbox-pwa/dist
+          keep_files: true
+
+  # The github-pages environment only allows deployments from master. PR workflows
+  # run on the head branch, so dispatch the publish workflow on master instead.
+  publish-preview:
+    needs: build-and-deploy
+    if: >-
+      always() &&
+      needs.build-and-deploy.result == 'success' &&
+      github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish preview via workflow dispatch
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'deploy-pages-sync.yml',
+              ref: 'master',
+            });
+
+  publish-production:
+    needs: build-and-deploy
+    if: >-
+      always() &&
+      needs.build-and-deploy.result == 'success' &&
+      github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - id: deployment
         uses: actions/deploy-pages@v4

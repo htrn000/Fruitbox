@@ -35,8 +35,8 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
 
-      - name: Install build tools
-        run: uv sync --package fruitbox --group build
+      - name: Validate CI install commands
+        run: uv run --package fruitbox-ci fruitbox-ci validate-ci
 
       - name: Add venv to PATH
         shell: pwsh
@@ -44,27 +44,26 @@ jobs:
 
       - name: Resolve model revision
         id: model
-        shell: python
+        shell: pwsh
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
+          uv run python -c @"
           import os
           from huggingface_hub import HfApi
 
-          revision = os.environ["HF_MODEL_REVISION"]
+          revision = os.environ['HF_MODEL_REVISION']
           try:
-              api = HfApi(token=os.environ.get("HF_TOKEN") or None)
-              info = api.repo_info(
-                  os.environ["HF_MODEL_REPO"],
-                  revision=revision,
-              )
+              api = HfApi(token=os.environ.get('HF_TOKEN') or None)
+              info = api.repo_info(os.environ['HF_MODEL_REPO'], revision=revision)
               sha = info.sha
           except Exception as exc:
-              print(f"Could not resolve Hugging Face revision ({exc}); using {revision!r} for cache key")
+              print(f'Could not resolve Hugging Face revision ({exc}); using {revision!r} for cache key')
               sha = revision
 
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as handle:
-              handle.write(f"sha={sha}\n")
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as handle:
+              handle.write(f'sha={sha}\n')
+          "@
 
       - uses: actions/cache@v4
         id: model-cache
@@ -83,18 +82,18 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           FRUITBOX_MODEL_MIRROR_URL: ${{ secrets.FRUITBOX_MODEL_MIRROR_URL }}
-        run: python .github/scripts/download_hf_model.py
+        run: uv run fruitbox-ci download-model
 
       - name: Download ONNX model
         if: steps.onnx-cache.outputs.cache-hit != 'true'
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           FRUITBOX_MODEL_MIRROR_URL: ${{ secrets.FRUITBOX_ONNX_MIRROR_URL }}
-        run: python .github/scripts/download_hf_onnx.py
+        run: uv run fruitbox-ci download-onnx
 
       - name: Build fruitbox-onnx.exe
         run: |
-          uv sync --package fruitbox-app-onnx --package fruitbox-pygame --package fruitbox-core --package fruitbox --group build
+          uv sync --package fruitbox-ci --package fruitbox-app-onnx --package fruitbox-pygame --package fruitbox-core --group build
           uv run --package fruitbox-app-onnx python -m PyInstaller --onefile --windowed --name fruitbox-onnx `
             --add-data "fruitbox_policy.onnx;." `
             --add-data "packages/fruitbox-pygame/src/fruitbox_pygame/assets;assets" `
@@ -103,12 +102,12 @@ jobs:
             --add-binary "C:\Windows\System32\VCRUNTIME140.dll;." `
             --add-binary "C:\Windows\System32\VCRUNTIME140_1.dll;." `
             packages/fruitbox-app-onnx/src/fruitbox_app_onnx/__main__.py
-          python .github/scripts/check_exe_size.py dist/fruitbox-onnx.exe
+          uv run fruitbox-ci check-exe-size dist/fruitbox-onnx.exe
 
       - name: Verify CPU torch
         run: |
-          uv sync --extra cpu --package fruitbox-app-torch --package fruitbox-pygame --package fruitbox-core --package fruitbox --group build
-          python .github/scripts/verify_torch_cpu.py
+          uv sync --package fruitbox-ci --extra cpu --package fruitbox-app-torch --package fruitbox-pygame --package fruitbox-core --group build
+          uv run fruitbox-ci verify-torch-cpu
 
       - name: Build fruitbox.exe (PyTorch)
         run: |
@@ -122,7 +121,7 @@ jobs:
             --add-binary "C:\Windows\System32\VCRUNTIME140.dll;." `
             --add-binary "C:\Windows\System32\VCRUNTIME140_1.dll;." `
             packages/fruitbox-app-torch/src/fruitbox_app_torch/__main__.py
-          python .github/scripts/check_exe_size.py dist/fruitbox.exe
+          uv run fruitbox-ci check-exe-size dist/fruitbox.exe
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4

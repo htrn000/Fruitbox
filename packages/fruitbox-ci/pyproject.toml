@@ -1,0 +1,51 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fruitbox-ci"
+version = "0.1.0"
+description = "CI scripts and build helpers for the Fruitbox monorepo"
+requires-python = ">=3.13"
+dependencies = [
+    "fruitbox-core",
+    "huggingface_hub",
+]
+
+[project.optional-dependencies]
+web = ["pygbag"]
+export = [
+    "torch",
+    "stable-baselines3",
+    "sb3-contrib",
+    "onnxruntime",
+    "onnxscript",
+    "numpy",
+]
+windows = ["pyinstaller"]
+
+[dependency-groups]
+build = ["pyinstaller"]
+web = ["pygbag"]
+export = [
+    "torch",
+    "stable-baselines3",
+    "sb3-contrib",
+    "onnxruntime",
+    "onnxscript",
+    "numpy",
+]
+
+[project.scripts]
+fruitbox-ci = "fruitbox_ci.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fruitbox_ci"]
+
+[tool.uv.sources]
+fruitbox-core = { workspace = true }
+
+# Workspace-level installs pull CI groups from this package.
+[tool.uv]
+default-groups = []
+

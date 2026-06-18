@@ -2,7 +2,7 @@ import pygame
 import pygame_gui
 import time
 import subprocess
-from fruitbox_core import stats as fruitbox_stats
+from .stats_sqlite import get_default_stats_store
 from . import colors as fruitbox_colors
 from .pygame_ui import WIN_W as _W, WIN_H as _H, get_theme
 
@@ -42,7 +42,8 @@ def _to_clipboard(text):
 
 
 class StatsOverlay:
-    def __init__(self):
+    def __init__(self, stats_store=None):
+        self._stats = stats_store if stats_store is not None else get_default_stats_store()
         self.visible          = False
         self._view            = "stats"
         self._card_rect       = pygame.Rect(0, 0, 0, 0)
@@ -97,7 +98,7 @@ class StatsOverlay:
             self._view         = "stats"
             self._scroll       = 0
             self._selected_row = None
-            self._summary      = fruitbox_stats.get_summary()
+            self._summary      = self._stats.get_summary()
             self._dropdown.show()
         else:
             self._dropdown.hide()
@@ -106,7 +107,7 @@ class StatsOverlay:
         self._view         = "history"
         self._scroll       = 0
         self._selected_row = None
-        self._history      = fruitbox_stats.get_history()[:20]
+        self._history      = self._stats.get_history()[:20]
         self._dropdown.hide()
 
     def handle_event(self, event):

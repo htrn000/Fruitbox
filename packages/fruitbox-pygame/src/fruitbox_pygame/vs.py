@@ -21,7 +21,8 @@ class ActionMasker:
 
 from fruitbox_core.game import FruitBoxGame
 from fruitbox_core.env import FruitBoxEnv
-from fruitbox_core import stats as fruitbox_stats
+from fruitbox_core.models import GameInfo
+from .stats_sqlite import get_default_stats_store
 from . import config as fruitbox_config
 from . import colors as fruitbox_colors
 from .pygame_ui import FPS, get_theme, _ASSETS
@@ -56,7 +57,8 @@ def mask_fn(env):
 
 
 class FruitBoxVs:
-    def __init__(self, opponent="solver", screen=None, grid_type="random"):
+    def __init__(self, opponent="solver", screen=None, grid_type="random", stats_store=None):
+        self._stats = stats_store if stats_store is not None else get_default_stats_store()
         self.opponent  = opponent
         self.grid_type = grid_type
 
@@ -92,7 +94,7 @@ class FruitBoxVs:
         self.close_over_rect      = pygame.Rect(0, 0, 0, 0)
         self._game_over_card_rect = pygame.Rect(0, 0, 0, 0)
         self._restart_over_rect   = pygame.Rect(0, 0, 0, 0)
-        self.stats            = fruitbox_stats.get_vs_stats()
+        self.stats            = self._stats.get_vs_stats()
 
         # ── pygame_gui ────────────────────────────────────────────
         self.ui = pygame_gui.UIManager((WIN_W, WIN_H), get_theme())
@@ -475,7 +477,7 @@ class FruitBoxVs:
                     else:       self.over_reason = f"Tie!  {h} – {a}"
                     self.pause_btn.disable()
                     if not self._result_recorded:
-                        fruitbox_stats.record(fruitbox_stats.GameInfo(
+                        self._stats.record(GameInfo(
                             gamemode="vs_ai",
                             grid_type=self.grid_type,
                             self_score=h,
@@ -483,7 +485,7 @@ class FruitBoxVs:
                             time_elapsed=time.time() - self._game_start,
                             seed=self.human_game.seed,
                         ))
-                        self.stats = fruitbox_stats.get_vs_stats()
+                        self.stats = self._stats.get_vs_stats()
                         self._result_recorded = True
 
             if self.human_game.paused:

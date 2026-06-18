@@ -21,6 +21,7 @@ members = [
     "fruitbox",
     "fruitbox-app-onnx",
     "fruitbox-app-torch",
+    "fruitbox-ci",
     "fruitbox-core",
     "fruitbox-pygame",
     "fruitbox-train",
@@ -244,19 +245,10 @@ cu128 = [
 ]
 
 [package.dev-dependencies]
-build = [
-    { name = "huggingface-hub" },
-    { name = "pyinstaller" },
-]
 plot = [
     { name = "matplotlib" },
     { name = "pandas" },
     { name = "tensorboard" },
-]
-web = [
-    { name = "onnxruntime" },
-    { name = "onnxscript" },
-    { name = "pygbag" },
 ]
 
 [package.metadata]
@@ -267,19 +259,10 @@ requires-dist = [
 provides-extras = ["cpu", "cu128"]
 
 [package.metadata.requires-dev]
-build = [
-    { name = "huggingface-hub" },
-    { name = "pyinstaller" },
-]
 plot = [
     { name = "matplotlib" },
     { name = "pandas" },
     { name = "tensorboard" },
-]
-web = [
-    { name = "onnxruntime" },
-    { name = "onnxscript" },
-    { name = "pygbag" },
 ]
 
 [[package]]
@@ -330,6 +313,76 @@ requires-dist = [
     { name = "torch", marker = "extra == 'cu128'", index = "https://download.pytorch.org/whl/cpu" },
 ]
 provides-extras = ["cpu", "cu128"]
+
+[[package]]
+name = "fruitbox-ci"
+version = "0.1.0"
+source = { editable = "packages/fruitbox-ci" }
+dependencies = [
+    { name = "fruitbox-core" },
+    { name = "huggingface-hub" },
+]
+
+[package.optional-dependencies]
+export = [
+    { name = "numpy" },
+    { name = "onnxruntime" },
+    { name = "onnxscript" },
+    { name = "sb3-contrib" },
+    { name = "stable-baselines3" },
+    { name = "torch", version = "2.12.1", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin' or (extra == 'extra-8-fruitbox-cpu' and extra == 'extra-8-fruitbox-cu128')" },
+    { name = "torch", version = "2.12.1+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin' or (extra == 'extra-8-fruitbox-cpu' and extra == 'extra-8-fruitbox-cu128')" },
+]
+web = [
+    { name = "pygbag" },
+]
+windows = [
+    { name = "pyinstaller" },
+]
+
+[package.dev-dependencies]
+build = [
+    { name = "pyinstaller" },
+]
+export = [
+    { name = "numpy" },
+    { name = "onnxruntime" },
+    { name = "onnxscript" },
+    { name = "sb3-contrib" },
+    { name = "stable-baselines3" },
+    { name = "torch", version = "2.12.1", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin' or (extra == 'extra-8-fruitbox-cpu' and extra == 'extra-8-fruitbox-cu128')" },
+    { name = "torch", version = "2.12.1+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin' or (extra == 'extra-8-fruitbox-cpu' and extra == 'extra-8-fruitbox-cu128')" },
+]
+web = [
+    { name = "pygbag" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fruitbox-core", editable = "packages/fruitbox-core" },
+    { name = "huggingface-hub" },
+    { name = "numpy", marker = "extra == 'export'" },
+    { name = "onnxruntime", marker = "extra == 'export'" },
+    { name = "onnxscript", marker = "extra == 'export'" },
+    { name = "pygbag", marker = "extra == 'web'" },
+    { name = "pyinstaller", marker = "extra == 'windows'" },
+    { name = "sb3-contrib", marker = "extra == 'export'" },
+    { name = "stable-baselines3", marker = "extra == 'export'" },
+    { name = "torch", marker = "extra == 'export'", index = "https://download.pytorch.org/whl/cpu" },
+]
+provides-extras = ["web", "export", "windows"]
+
+[package.metadata.requires-dev]
+build = [{ name = "pyinstaller" }]
+export = [
+    { name = "numpy" },
+    { name = "onnxruntime" },
+    { name = "onnxscript" },
+    { name = "sb3-contrib" },
+    { name = "stable-baselines3" },
+    { name = "torch", index = "https://download.pytorch.org/whl/cpu" },
+]
+web = [{ name = "pygbag" }]
 
 [[package]]
 name = "fruitbox-core"
@@ -656,7 +709,7 @@ name = "macholib"
 version = "1.16.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "altgraph", marker = "sys_platform == 'darwin' or (sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-fruitbox-cpu' and extra != 'extra-8-fruitbox-cu128') or (extra == 'extra-8-fruitbox-cpu' and extra == 'extra-8-fruitbox-cu128')" },
+    { name = "altgraph", marker = "sys_platform == 'darwin' or (extra == 'extra-8-fruitbox-cpu' and extra == 'extra-8-fruitbox-cu128')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/10/2f/97589876ea967487978071c9042518d28b958d87b17dceb7cdc1d881f963/macholib-1.16.4.tar.gz", hash = "sha256:f408c93ab2e995cd2c46e34fe328b130404be143469e41bc366c807448979362", size = 59427, upload-time = "2025-11-22T08:28:38.373Z" }
 wheels = [

@@ -9,7 +9,15 @@ cpu = ["torch"]
 cu128 = ["torch"]
 
 [tool.uv.workspace]
-members = ["packages/*"]
+members = [
+    "packages/fruitbox-core",
+    "packages/fruitbox-pygame",
+    "packages/fruitbox-app-torch",
+    "packages/fruitbox-app-onnx",
+    "packages/fruitbox-train",
+    "packages/fruitbox-web",
+    "packages/fruitbox-ci",
+]
 
 [tool.uv.sources]
 fruitbox-app-onnx  = { workspace = true }
@@ -18,17 +26,16 @@ fruitbox-core      = { workspace = true }
 fruitbox-pygame    = { workspace = true }
 fruitbox-train     = { workspace = true }
 fruitbox-web       = { workspace = true }
+fruitbox-ci        = { workspace = true }
 torch = { index = "pytorch-cpu" }
-
-[dependency-groups]
-build = ["huggingface_hub", "pyinstaller"]
-plot  = ["matplotlib", "pandas", "tensorboard"]
-web   = ["onnxruntime", "onnxscript", "pygbag"]
 
 [tool.uv]
 conflicts = [
     [{ extra = "cpu" }, { extra = "cu128" }],
 ]
+
+[dependency-groups]
+plot = ["matplotlib", "pandas", "tensorboard"]
 
 [[tool.uv.index]]
 name = "pytorch-cpu"
