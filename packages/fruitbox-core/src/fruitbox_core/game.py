@@ -1,6 +1,54 @@
 import random
+import threading
+
 import numpy as np
 from .grid import FruitBoxGrid
+from .board_viz import BoardVizMeta, VizMode
+from .solver import find_best_solver_trace
+
+
+class SolverTraceJob:
+    IDLE = "idle"
+    RUNNING = "running"
+    DONE = "done"
+    FAILED = "failed"
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._status = self.IDLE
+        self._result = None
+
+    def start(self, grid):
+        with self._lock:
+            if self._status == self.RUNNING:
+                return False
+            self._status = self.RUNNING
+            self._result = None
+        grid_copy = [row[:] for row in grid]
+        threading.Thread(target=self._run, args=(grid_copy,), daemon=True).start()
+        return True
+
+    def _run(self, grid):
+        try:
+            result = find_best_solver_trace(grid)
+        except Exception:
+            result = BoardVizMeta()
+        with self._lock:
+            if result.mode == VizMode.OFF:
+                self._status = self.FAILED
+                self._result = None
+            else:
+                self._status = self.DONE
+                self._result = result
+
+    def poll(self):
+        with self._lock:
+            return self._status, self._result
+
+    def reset(self):
+        with self._lock:
+            self._status = self.IDLE
+            self._result = None
 
 
 class FruitBoxGame:
@@ -15,6 +63,10 @@ class FruitBoxGame:
         self._grid_gen = FruitBoxGrid(rows, columns)
         self.grid = None
         self.seed = None
+        self.board_viz = BoardVizMeta()
+        self._generator_viz = None
+        self._trace_job = SolverTraceJob()
+        self._trace_wanted = False
 
     _EXAMPLE_GRIDS = [
         #116
@@ -64,7 +116,73 @@ class FruitBoxGame:
         self.grid = self._grid_gen.generate(self.grid_type)
         self.score = 0
         self.elapsed = 0.0
+        self.board_viz = BoardVizMeta()
+        self._generator_viz = self._grid_gen.generator_viz_meta()
+        self._trace_job.reset()
+        self._trace_wanted = False
         return self.grid.copy()
+
+    def has_generator_viz(self):
+        return self._generator_viz is not None
+
+    def is_trace_computing(self):
+        status, _ = self._trace_job.poll()
+        return self._trace_wanted and status == SolverTraceJob.RUNNING
+
+    def clear_solver_trace_viz(self):
+        self._trace_wanted = False
+        if self.board_viz.mode == VizMode.SOLVER_TRACE:
+            self.board_viz = BoardVizMeta()
+
+    def request_solver_trace_viz(self):
+        if self.board_viz.mode == VizMode.SOLVER_TRACE:
+            return self.board_viz
+        status, result = self._trace_job.poll()
+        if status == SolverTraceJob.DONE and result is not None:
+            self.board_viz = result
+            self._trace_job.reset()
+            self._trace_wanted = False
+            return self.board_viz
+        if status == SolverTraceJob.RUNNING:
+            self._trace_wanted = True
+            return self.board_viz
+        self._trace_wanted = True
+        self._trace_job.start(self.grid.tolist())
+        return self.board_viz
+
+    def poll_solver_trace_viz(self):
+        """Apply a finished trace or clear a failed request. Returns status or None."""
+        if not self._trace_wanted:
+            return None
+        status, result = self._trace_job.poll()
+        if status == SolverTraceJob.DONE and result is not None:
+            self.board_viz = result
+            self._trace_job.reset()
+            self._trace_wanted = False
+            return "done"
+        if status == SolverTraceJob.FAILED:
+            self._trace_wanted = False
+            self._trace_job.reset()
+            return "failed"
+        if status == SolverTraceJob.RUNNING:
+            return "running"
+        return None
+
+    def toggle_solver_trace_viz(self):
+        if self.board_viz.mode == VizMode.SOLVER_TRACE or self.is_trace_computing():
+            self.clear_solver_trace_viz()
+        else:
+            self.request_solver_trace_viz()
+        return self.board_viz
+
+    def toggle_generator_tree_viz(self):
+        if self.board_viz.mode == VizMode.GENERATOR_TREE:
+            self.board_viz = BoardVizMeta()
+            return self.board_viz
+        if self._generator_viz is None:
+            return self.board_viz
+        self.board_viz = self._generator_viz
+        return self.board_viz
 
     def tick(self, dt):
         if not self.paused:

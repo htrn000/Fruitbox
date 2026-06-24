@@ -76,8 +76,11 @@
         <div class="hud-center">
           <div class="hud-stat"><span class="hud-label">Score</span><span class="hud-val" id="play-score">0</span></div>
           <div class="hud-stat"><span class="hud-label">Time</span><span class="hud-val" id="play-timer">2:00</span></div>
+          <div class="viz-legend" id="play-viz-legend" hidden></div>
         </div>
         <div class="hud-right">
+          <button class="viz-btn" id="play-viz-trace" title="Show solve trace">Trace</button>
+          <button class="viz-btn" id="play-viz-gen" title="Show generation tree">Tree</button>
           <button class="icon-btn" id="play-pause" title="Pause">
             <img class="icon-img" id="play-pause-icon" src="./assets/pause.circle.png" alt="">
           </button>
@@ -111,8 +114,11 @@
           <div class="vs-score-side"><span class="vs-side-label">You</span><span class="hud-val" id="vs-human-score">0</span></div>
           <div class="hud-stat"><span class="hud-label">Time</span><span class="hud-val" id="vs-timer">2:00</span></div>
           <div class="vs-score-side"><span class="vs-side-label">AI</span><span class="hud-val" id="vs-ai-score">0</span></div>
+          <div class="viz-legend" id="vs-viz-legend" hidden></div>
         </div>
         <div class="hud-right">
+          <button class="viz-btn" id="vs-viz-trace" title="Show solve trace">Trace</button>
+          <button class="viz-btn" id="vs-viz-gen" title="Show generation tree">Tree</button>
           <button class="icon-btn" id="vs-toggle-ai-board" title="Hide AI board">
             <img class="icon-img" id="vs-toggle-ai-icon" src="./assets/eye.png" alt="">
           </button>
@@ -159,8 +165,11 @@
         <div class="hud-center">
           <div class="hud-stat"><span class="hud-label">AI Score</span><span class="hud-val" id="watch-score">0</span></div>
           <div class="hud-stat"><span class="hud-label">Time</span><span class="hud-val" id="watch-timer">2:00</span></div>
+          <div class="viz-legend" id="watch-viz-legend" hidden></div>
         </div>
         <div class="hud-right">
+          <button class="viz-btn" id="watch-viz-trace" title="Show solve trace">Trace</button>
+          <button class="viz-btn" id="watch-viz-gen" title="Show generation tree">Tree</button>
           <button class="icon-btn" id="watch-restart" title="Restart">
             <img class="icon-img" src="./assets/arrow.counterclockwise.circle.png" alt="">
           </button>

@@ -91,6 +91,140 @@ let lastWatchAiTs = 0, watchHighlight = null;
 
 let dragStart = null, dragEnd = null;
 let animId = null, lastTs = null;
+let playVizMeta = null;
+let vsVizMeta = null;
+let watchVizMeta = null;
+let traceComputing = false;
+
+// Shared depth palette (matches fruitbox_core.board_viz.DEPTH_RGB)
+const DEPTH_HEX = [
+  '#0087ff', '#00cd00', '#ff8700', '#ff00d7', '#ffd700',
+  '#00d7ff', '#af00d7', '#ff0000', '#87ff00', '#8700d7',
+];
+
+function depthHex(depth) {
+  return DEPTH_HEX[((depth % DEPTH_HEX.length) + DEPTH_HEX.length) % DEPTH_HEX.length];
+}
+
+function legendDepths(meta) {
+  if (!meta || !meta.mode || meta.mode === 'off' || !meta.entries?.length) return [];
+  return [...new Set(meta.entries.map(e => e.depth))].sort((a, b) => a - b);
+}
+
+function syncVizLegend(legendId, meta) {
+  const el = $(legendId);
+  const depths = legendDepths(meta);
+  if (!depths.length) {
+    el.hidden = true;
+    el.replaceChildren();
+    return;
+  }
+  el.hidden = false;
+  el.replaceChildren(...depths.map(d => {
+    const item = document.createElement('span');
+    item.className = 'viz-legend-item';
+    const swatch = document.createElement('span');
+    swatch.className = 'viz-swatch';
+    swatch.style.background = depthHex(d);
+    item.append(swatch, String(d));
+    return item;
+  }));
+}
+
+function syncVizButtons(traceId, genId, meta, hasGen, computing) {
+  const traceBtn = $(traceId);
+  const genBtn = $(genId);
+  genBtn.disabled = !hasGen;
+  traceBtn.disabled = computing;
+  traceBtn.textContent = computing ? '…' : 'Trace';
+  traceBtn.classList.toggle('computing', computing);
+  traceBtn.classList.toggle('active', !computing && meta?.mode === 'solver_trace');
+  genBtn.classList.toggle('active', meta?.mode === 'generator_tree');
+}
+
+function syncPlayVizLegend() {
+  syncVizLegend('play-viz-legend', playVizMeta);
+}
+
+function syncPlayVizButtons() {
+  syncVizButtons('play-viz-trace', 'play-viz-gen', playVizMeta, py('play_has_generator_viz'), traceComputing);
+  syncPlayVizLegend();
+}
+
+function syncVsVizButtons() {
+  syncVizButtons('vs-viz-trace', 'vs-viz-gen', vsVizMeta, py('vs_has_generator_viz'), traceComputing);
+  syncVizLegend('vs-viz-legend', vsVizMeta);
+}
+
+function syncWatchVizButtons() {
+  syncVizButtons('watch-viz-trace', 'watch-viz-gen', watchVizMeta, py('watch_has_generator_viz'), traceComputing);
+  syncVizLegend('watch-viz-legend', watchVizMeta);
+}
+
+function blendHex(baseHex, tintHex, alpha) {
+  const parse = h => [
+    parseInt(h.slice(1, 3), 16),
+    parseInt(h.slice(3, 5), 16),
+    parseInt(h.slice(5, 7), 16),
+  ];
+  const [br, bg, bb] = parse(baseHex);
+  const [tr, tg, tb] = parse(tintHex);
+  const a = Math.max(0, Math.min(1, alpha));
+  const mix = ch => Math.round(ch[0] * (1 - a) + ch[1] * a);
+  const rgb = [mix([br, tr]), mix([bg, tg]), mix([bb, tb])];
+  return `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
+}
+
+async function toggleSolverTrace(scope) {
+  if (traceComputing) return;
+  const cfg = {
+    play: {
+      meta: () => playVizMeta,
+      setMeta: m => { playVizMeta = m; },
+      sync: syncPlayVizButtons,
+      clearPy: 'play_clear_solver_trace',
+      computePy: 'play_compute_solver_trace',
+    },
+    vs: {
+      meta: () => vsVizMeta,
+      setMeta: m => { vsVizMeta = m; },
+      sync: syncVsVizButtons,
+      clearPy: 'vs_clear_solver_trace',
+      computePy: 'vs_compute_solver_trace',
+    },
+    watch: {
+      meta: () => watchVizMeta,
+      setMeta: m => { watchVizMeta = m; },
+      sync: syncWatchVizButtons,
+      clearPy: 'watch_clear_solver_trace',
+      computePy: 'watch_compute_solver_trace',
+    },
+  }[scope];
+  if (!cfg) return;
+
+  if (cfg.meta()?.mode === 'solver_trace') {
+    cfg.setMeta(JSON.parse(py(cfg.clearPy)));
+    cfg.sync();
+    return;
+  }
+
+  traceComputing = true;
+  cfg.sync();
+  await new Promise(r => requestAnimationFrame(r));
+
+  try {
+    const status = await pyodide.runPythonAsync(`${cfg.computePy}()`);
+    cfg.setMeta(JSON.parse(py(`${scope}_viz_json`)));
+    if (status === 'failed') showToast('No solve trace found');
+  } catch (e) {
+    py(cfg.clearPy);
+    showToast('Trace failed');
+    console.error(e);
+  } finally {
+    traceComputing = false;
+    cfg.sync();
+  }
+}
 
 // ── DOM helpers ───────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
@@ -182,6 +316,40 @@ def play_apply(r1, c1, r2, c2):
     pts, done = _play.apply_move(int(r1),int(c1),int(r2),int(c2))
     return [int(pts), bool(done)]
 
+def play_has_generator_viz():
+    return bool(_play.has_generator_viz())
+
+def play_viz_json():
+    return _json.dumps(_play.board_viz.to_dict())
+
+def play_toggle_generator_tree():
+    _play.toggle_generator_tree_viz()
+    return _json.dumps(_play.board_viz.to_dict())
+
+def play_clear_solver_trace():
+    _play.clear_solver_trace_viz()
+    return _json.dumps(_play.board_viz.to_dict())
+
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from fruitbox_core.solver import find_best_solver_trace
+from fruitbox_core.board_viz import VizMode, BoardVizMeta
+
+_trace_executor = ThreadPoolExecutor(max_workers=1)
+
+async def _compute_solver_trace(game):
+    grid = game.grid.tolist()
+    loop = asyncio.get_running_loop()
+    meta = await loop.run_in_executor(_trace_executor, find_best_solver_trace, grid)
+    if meta.mode == VizMode.OFF:
+        game.board_viz = BoardVizMeta()
+        return 'failed'
+    game.board_viz = meta
+    return 'done'
+
+async def play_compute_solver_trace():
+    return await _compute_solver_trace(_play)
+
 # ── vs AI ─────────────────────────────────────────────────────────────────────
 def vs_init(grid_type, seed=None):
     global _vs_human, _vs_env
@@ -230,6 +398,23 @@ def vs_ai_apply(r1, c1, r2, c2):
     pts, done = _vs_env.game.apply_move(int(r1),int(c1),int(r2),int(c2))
     return [int(pts), bool(done)]
 
+def vs_has_generator_viz():
+    return bool(_vs_human.has_generator_viz())
+
+def vs_viz_json():
+    return _json.dumps(_vs_human.board_viz.to_dict())
+
+def vs_clear_solver_trace():
+    _vs_human.clear_solver_trace_viz()
+    return _json.dumps(_vs_human.board_viz.to_dict())
+
+async def vs_compute_solver_trace():
+    return await _compute_solver_trace(_vs_human)
+
+def vs_toggle_generator_tree():
+    _vs_human.toggle_generator_tree_viz()
+    return _json.dumps(_vs_human.board_viz.to_dict())
+
 # ── watch AI ──────────────────────────────────────────────────────────────────
 def watch_init(grid_type, seed=None):
     global _watch_env
@@ -259,6 +444,23 @@ def watch_decode(action):
 def watch_apply(r1, c1, r2, c2):
     pts, done = _watch_env.game.apply_move(int(r1),int(c1),int(r2),int(c2))
     return [int(pts), bool(done)]
+
+def watch_has_generator_viz():
+    return bool(_watch_env.game.has_generator_viz())
+
+def watch_viz_json():
+    return _json.dumps(_watch_env.game.board_viz.to_dict())
+
+def watch_clear_solver_trace():
+    _watch_env.game.clear_solver_trace_viz()
+    return _json.dumps(_watch_env.game.board_viz.to_dict())
+
+async def watch_compute_solver_trace():
+    return await _compute_solver_trace(_watch_env.game)
+
+def watch_toggle_generator_tree():
+    _watch_env.game.toggle_generator_tree_viz()
+    return _json.dumps(_watch_env.game.board_viz.to_dict())
 
 # ── stats ─────────────────────────────────────────────────────────────────────
 def stats_record(gamemode, grid_type, self_score, seed, time_elapsed, opp_score=None):
@@ -314,7 +516,7 @@ _s._PATH = "/fruitbox/fruitbox_stats.db"
 }
 
 async function loadFruitboxCore() {
-  const files = ['__init__.py', 'game.py', 'grid.py', 'stats.py', 'env.py'];
+  const files = ['__init__.py', 'game.py', 'grid.py', 'stats.py', 'env.py', 'solver.py', 'board_viz.py'];
   pyodide.FS.mkdir('/home/pyodide/fruitbox_core');
   await Promise.all(files.map(async f => {
     const r = await fetch(`./fruitbox_core/${f}`);
@@ -392,16 +594,23 @@ function selBounds(a, b) {
 }
 
 function drawBoard(canvas, grid, rows, cols, cellSize, gap, {
-  drag = null, validDrag = null, aiSel = null, paused = false,
+  drag = null, validDrag = null, aiSel = null, paused = false, vizMeta = null,
 } = {}) {
   if (!grid) return;
   const ctx  = canvas.getContext('2d');
   const step = cellSize + gap;
+  const vizLookup = {};
+  if (vizMeta && vizMeta.mode && vizMeta.mode !== 'off') {
+    for (const e of vizMeta.entries || []) {
+      vizLookup[e.y * cols + e.x] = e;
+    }
+  }
 
   ctx.fillStyle = C.bg;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   const fontSize = Math.floor(cellSize * 0.46);
+  const labelSize = Math.max(9, Math.floor(cellSize * 0.22));
   ctx.font = `600 ${fontSize}px system-ui, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -410,17 +619,30 @@ function drawBoard(canvas, grid, rows, cols, cellSize, gap, {
     for (let c = 0; c < cols; c++) {
       const v = grid[r * cols + c];
       const x = c * step, y = r * step;
+      const entry = vizLookup[r * cols + c];
       if (v === -1) {
         ctx.fillStyle = C.cleared;
         ctx.fillRect(x, y, cellSize, cellSize);
       } else {
-        ctx.fillStyle = C.cellBg;
+        ctx.fillStyle = entry
+          ? blendHex(C.cellBg, depthHex(entry.depth), 0.42)
+          : C.cellBg;
         ctx.fillRect(x, y, cellSize, cellSize);
         ctx.strokeStyle = C.cellBorder;
         ctx.lineWidth = 1;
         ctx.strokeRect(x + 0.5, y + 0.5, cellSize - 1, cellSize - 1);
         ctx.fillStyle = C.text;
+        ctx.font = `600 ${fontSize}px system-ui, sans-serif`;
         ctx.fillText(v, x + cellSize / 2, y + cellSize / 2);
+        if (entry && entry.label) {
+          ctx.font = `700 ${labelSize}px system-ui, sans-serif`;
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'top';
+          ctx.fillStyle = C.textDim;
+          ctx.fillText(entry.label, x + 3, y + 2);
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+        }
       }
     }
   }
@@ -476,7 +698,9 @@ function startPlay(gridType, opts = {}) {
   $('play-canvas-wrap').classList.remove('board-paused');
   playGameSeed = py('play_seed');
   playGameStart = performance.now();
+  playVizMeta = JSON.parse(py('play_viz_json'));
   dragStart = null; dragEnd = null;
+  syncPlayVizButtons();
 
   const canvas = $('canvas-play');
   setupCanvas(canvas, playRows, playCols, CELL, GAP);
@@ -498,7 +722,7 @@ function playLoop(ts) {
 
   if (playGameOver) {
     drawBoard($('canvas-play'), playGrid, playRows, playCols, CELL, GAP,
-      { drag: bounds, validDrag: null, paused: false });
+      { drag: bounds, validDrag: null, paused: false, vizMeta: playVizMeta });
     animId = requestAnimationFrame(playLoop);
     return;
   }
@@ -518,7 +742,7 @@ function playLoop(ts) {
   if (bounds) isValid = py('play_validate', ...bounds);
 
   drawBoard($('canvas-play'), playGrid, playRows, playCols, CELL, GAP,
-    { drag: bounds, validDrag: isValid, paused: playPaused });
+    { drag: bounds, validDrag: isValid, paused: playPaused, vizMeta: playVizMeta });
 
   $('play-score').textContent = playScore;
   $('play-timer').textContent = fmt(playTimeRemaining);
@@ -566,6 +790,12 @@ function setupPlayInput() {
   });
   canvas.addEventListener('mouseleave', () => { dragStart = null; dragEnd = null; });
 
+  $('play-viz-trace').onclick = () => { toggleSolverTrace('play'); };
+  $('play-viz-gen').onclick = () => {
+    if ($('play-viz-gen').disabled) return;
+    playVizMeta = JSON.parse(py('play_toggle_generator_tree'));
+    syncPlayVizButtons();
+  };
   $('play-pause').onclick = () => {
     if (playGameOver) return;
     if (playPaused) { py('play_resume'); playPaused = false; $('play-pause-icon').src = './assets/pause.circle.png'; $('play-canvas-wrap').classList.remove('board-paused'); lastTs = null; }
@@ -596,9 +826,11 @@ function startVs(gridType, seed = null) {
   $('vs-toggle-ai-board').title = 'Show AI board';
   vsGameSeed  = py('vs_seed');
   vsGameStart = performance.now();
+  vsVizMeta = JSON.parse(py('vs_viz_json'));
   dragStart = null; dragEnd = null;
   lastAiMoveTs = performance.now() + 800;
   aiHighlight = null;
+  syncVsVizButtons();
 
   setupCanvas($('canvas-human'),   DEFAULT_ROWS, DEFAULT_COLS, VS_CELL, VS_GAP);
   setupCanvas($('canvas-ai-board'),DEFAULT_ROWS, DEFAULT_COLS, VS_CELL, VS_GAP);
@@ -645,7 +877,7 @@ function vsLoop(ts) {
   if (bounds && !vsHumanOver) isValid = py('vs_human_validate', ...bounds);
 
   drawBoard($('canvas-human'),   vsHumanGrid, DEFAULT_ROWS, DEFAULT_COLS, VS_CELL, VS_GAP,
-    { drag: bounds, validDrag: isValid, paused: vsPaused });
+    { drag: bounds, validDrag: isValid, paused: vsPaused, vizMeta: vsVizMeta });
   drawBoard($('canvas-ai-board'), vsAiGrid,   DEFAULT_ROWS, DEFAULT_COLS, VS_CELL, VS_GAP,
     { aiSel: aiHighlight ? [aiHighlight.r1,aiHighlight.c1,aiHighlight.r2,aiHighlight.c2] : null });
 
@@ -730,6 +962,13 @@ function setupVsInput() {
   $('vs-over-again').onclick = () => $('vs-restart').onclick();
   $('vs-over-menu').onclick  = () => showMenu();
   $('vs-over-close').onclick = () => hideOver('vs-over');
+
+  $('vs-viz-trace').onclick = () => { toggleSolverTrace('vs'); };
+  $('vs-viz-gen').onclick = () => {
+    if ($('vs-viz-gen').disabled) return;
+    vsVizMeta = JSON.parse(py('vs_toggle_generator_tree'));
+    syncVsVizButtons();
+  };
 }
 
 // ── Watch AI ──────────────────────────────────────────────────────────────────
@@ -738,8 +977,10 @@ function startWatch(gridType, seed = null) {
   watchGrid = py('watch_grid');
   watchScore = 0; watchTimeRemaining = DEFAULT_TIME; watchOver = false;
   watchGameStart = performance.now();
+  watchVizMeta = JSON.parse(py('watch_viz_json'));
   lastWatchAiTs = performance.now() + 600;
   watchHighlight = null;
+  syncWatchVizButtons();
 
   setupCanvas($('canvas-watch'), DEFAULT_ROWS, DEFAULT_COLS, CELL, GAP);
   hideOver('watch-over');
@@ -774,6 +1015,7 @@ function watchLoop(ts) {
   watchGrid = py('watch_grid');
   drawBoard($('canvas-watch'), watchGrid, DEFAULT_ROWS, DEFAULT_COLS, CELL, GAP, {
     aiSel: watchHighlight ? [watchHighlight.r1,watchHighlight.c1,watchHighlight.r2,watchHighlight.c2] : null,
+    vizMeta: watchVizMeta,
   });
 
   $('watch-score').textContent = watchScore;
@@ -823,6 +1065,13 @@ function setupWatchInput() {
   $('watch-over-again').onclick = () => { clearTimeout(watchAutoRestartTimer); $('watch-restart').onclick(); };
   $('watch-over-menu').onclick  = () => { clearTimeout(watchAutoRestartTimer); showMenu(); };
   $('watch-over-close').onclick = () => { clearTimeout(watchAutoRestartTimer); hideOver('watch-over'); };
+
+  $('watch-viz-trace').onclick = () => { toggleSolverTrace('watch'); };
+  $('watch-viz-gen').onclick = () => {
+    if ($('watch-viz-gen').disabled) return;
+    watchVizMeta = JSON.parse(py('watch_toggle_generator_tree'));
+    syncWatchVizButtons();
+  };
 }
 
 // ── Settings overlay ──────────────────────────────────────────────────────────

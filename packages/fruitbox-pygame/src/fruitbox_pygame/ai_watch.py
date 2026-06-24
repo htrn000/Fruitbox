@@ -19,6 +19,13 @@ class ActionMasker:
         return self.env.step(action)
 
 from fruitbox_core.env import FruitBoxEnv
+from fruitbox_core.board_viz import (
+    BoardVizMeta,
+    VizMode,
+    blend_rgb,
+    legend_depths,
+    rgb_for_depth,
+)
 from . import colors as fruitbox_colors
 from . import config as fruitbox_config
 from .pygame_ui import (
@@ -29,6 +36,8 @@ from .pygame_ui import (
 _BTN_H = 34
 _BTN_Y = (HUD_H - _BTN_H) // 2
 _BTN_X0 = PADDING + 90
+_TRACE_W = 78
+_TREE_W  = 78
 
 AI_INTERVAL = 0.5
 
@@ -53,6 +62,7 @@ class FruitBoxAiWatch:
         self.font_over  = pygame.font.SysFont("Arial", 36, bold=True)
         self.font_sub   = pygame.font.SysFont("Arial", 18)
         self.font_btn   = pygame.font.SysFont("Arial", 13, bold=True)
+        self.font_viz   = pygame.font.SysFont("Arial", 11, bold=True)
 
         self.ai_env = ActionMasker(FruitBoxEnv(grid_type=grid_type), mask_fn)
         self.game   = self.ai_env.env.game
@@ -60,6 +70,8 @@ class FruitBoxAiWatch:
 
         self.overlay         = pygame.Surface((WIN_W, WIN_H), pygame.SRCALPHA)
         self.close_over_rect = pygame.Rect(0, 0, 0, 0)
+        self._trace_notice          = ""
+        self._trace_notice_until    = 0.0
 
         # ── pygame_gui ────────────────────────────────────────────
         self.ui = pygame_gui.UIManager((WIN_W, WIN_H), get_theme())
@@ -74,6 +86,18 @@ class FruitBoxAiWatch:
             manager=self.ui,
         )
         bx += 56 + 8
+        self.trace_viz_btn = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect(bx, _BTN_Y, _TRACE_W, _BTN_H),
+            text="Solve trace",
+            manager=self.ui,
+        )
+        bx += _TRACE_W + 6
+        self.gen_viz_btn = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect(bx, _BTN_Y, _TREE_W, _BTN_H),
+            text="Gen tree",
+            manager=self.ui,
+        )
+        bx += _TREE_W + 8
         self.restart_btn = pygame_gui.elements.UIButton(
             relative_rect=pygame.Rect(bx, _BTN_Y, _BTN_H, _BTN_H),
             text="",
@@ -81,6 +105,37 @@ class FruitBoxAiWatch:
         )
 
         self.reset()
+
+    def _sync_viz_buttons(self):
+        viz = self.game.board_viz
+        computing = self.game.is_trace_computing()
+        if self.game.has_generator_viz():
+            self.gen_viz_btn.enable()
+        else:
+            self.gen_viz_btn.disable()
+            if viz.mode == VizMode.GENERATOR_TREE:
+                self.game.board_viz = BoardVizMeta()
+                viz = self.game.board_viz
+
+        if computing:
+            self.trace_viz_btn.set_text("Computing…")
+            self.trace_viz_btn.disable()
+        else:
+            self.trace_viz_btn.enable()
+            self.trace_viz_btn.set_text(
+                "Trace on" if viz.mode == VizMode.SOLVER_TRACE else "Solve trace"
+            )
+        self.gen_viz_btn.set_text(
+            "Tree on" if viz.mode == VizMode.GENERATOR_TREE else "Gen tree"
+        )
+
+    def _poll_trace_viz(self):
+        status = self.game.poll_solver_trace_viz()
+        if status == "failed":
+            self._trace_notice = "No solve trace found"
+            self._trace_notice_until = time.time() + 3.0
+        if status is not None:
+            self._sync_viz_buttons()
 
     def reset(self):
         self.ai_env.reset()
@@ -91,6 +146,9 @@ class FruitBoxAiWatch:
         self.sel_start      = None
         self.sel_end        = None
         self.sel_clear_at   = 0
+        self._trace_notice          = ""
+        self._trace_notice_until    = 0.0
+        self._sync_viz_buttons()
 
     def _create_model(self):
         raise NotImplementedError("subclass must implement _create_model()")
@@ -123,14 +181,54 @@ class FruitBoxAiWatch:
         pygame.draw.rect(self.screen, C["CELL_BORDER"], (bar_x, bar_y, bar_w, bar_h), border_radius=3)
         pygame.draw.rect(self.screen, tcol, (bar_x, bar_y, fill_w, bar_h), border_radius=3)
 
+        self._draw_depth_legend()
+
+        if self._trace_notice and time.time() < self._trace_notice_until:
+            notice = self.font_label.render(self._trace_notice, True, C["TIMER_DANGER"])
+            nx = (WIN_W - notice.get_width()) // 2
+            self.screen.blit(notice, (nx, HUD_H - 14))
+
+    def _draw_depth_legend(self):
+        depths = legend_depths(self.game.board_viz)
+        if not depths:
+            return
+
+        C = fruitbox_colors.C
+        swatch = 10
+        num_w = self.font_viz.size("9")[0]
+        item_w = swatch + 3 + num_w
+        gap = 8
+        total_w = len(depths) * item_w + max(0, len(depths) - 1) * gap
+        x = (WIN_W - total_w) // 2
+        y = HUD_H - 15
+
+        for depth in depths:
+            rect = pygame.Rect(x, y, swatch, swatch)
+            pygame.draw.rect(self.screen, rgb_for_depth(depth), rect, border_radius=2)
+            label = self.font_viz.render(str(depth), True, C["TEXT_SECONDARY"])
+            self.screen.blit(label, (x + swatch + 3, y - 1))
+            x += item_w + gap
+
     def _draw_board(self):
         C = fruitbox_colors.C
+        viz = self.game.board_viz
+        lookup = viz.lookup() if viz.mode != VizMode.OFF else {}
         for row in range(ROWS):
             for col in range(COLS):
                 rect    = self._cell_rect(row, col)
                 val     = self.game.grid[row][col]
                 cleared = val == -1
-                pygame.draw.rect(self.screen, C["CLEARED_BG"] if cleared else C["CELL_BG"], rect, border_radius=6)
+                entry   = lookup.get((row, col))
+
+                if cleared:
+                    cell_color = C["CLEARED_BG"]
+                elif entry is not None:
+                    tint = rgb_for_depth(entry.depth)
+                    cell_color = blend_rgb(C["CELL_BG"], tint, 0.42)
+                else:
+                    cell_color = C["CELL_BG"]
+
+                pygame.draw.rect(self.screen, cell_color, rect, border_radius=6)
                 pygame.draw.rect(self.screen, C["CELL_BORDER"], rect, width=1, border_radius=6)
                 if not cleared:
                     surf = self.font_num.render(str(val), True, C["TEXT_PRIMARY"])
@@ -138,6 +236,9 @@ class FruitBoxAiWatch:
                         rect.x + (CELL - 1 - surf.get_width())  // 2,
                         rect.y + (CELL - 1 - surf.get_height()) // 2,
                     ))
+                    if entry is not None and entry.label:
+                        label_surf = self.font_viz.render(entry.label, True, C["TEXT_SECONDARY"])
+                        self.screen.blit(label_surf, (rect.x + 4, rect.y + 2))
 
         if self.sel_start and self.sel_end:
             C  = fruitbox_colors.C
@@ -214,6 +315,12 @@ class FruitBoxAiWatch:
                         return
                     if event.ui_element == self.restart_btn:
                         self.reset()
+                    if event.ui_element == self.trace_viz_btn:
+                        self.game.toggle_solver_trace_viz()
+                        self._sync_viz_buttons()
+                    if event.ui_element == self.gen_viz_btn and self.game.has_generator_viz():
+                        self.game.toggle_generator_tree_viz()
+                        self._sync_viz_buttons()
 
                 if event.type == pygame.KEYDOWN:
                     if event.key == fruitbox_config.get("key_menu"):
@@ -244,6 +351,8 @@ class FruitBoxAiWatch:
                 if time.time() - self.game_over_at >= 5.0:
                     self.reset()
                     continue
+
+            self._poll_trace_viz()
 
             self.screen.fill(fruitbox_colors.C["BG"])
             self._draw_hud()

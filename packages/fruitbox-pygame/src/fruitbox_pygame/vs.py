@@ -22,6 +22,13 @@ class ActionMasker:
 from fruitbox_core.game import FruitBoxGame
 from fruitbox_core.env import FruitBoxEnv
 from fruitbox_core import stats as fruitbox_stats
+from fruitbox_core.board_viz import (
+    BoardVizMeta,
+    VizMode,
+    blend_rgb,
+    legend_depths,
+    rgb_for_depth,
+)
 from . import config as fruitbox_config
 from . import colors as fruitbox_colors
 from .pygame_ui import FPS, get_theme, _ASSETS
@@ -50,6 +57,9 @@ _BTN_Y = (HUD_H - _BTN_H) // 2
 # Pre-calculate right edge of AI board
 _AI_BOARD_RIGHT = PADDING * 3 + BOARD_W + GAP + BOARD_W  # = WIN_W - PADDING
 
+_TRACE_W = 78
+_TREE_W  = 78
+
 
 def mask_fn(env):
     return env.action_masks()
@@ -75,6 +85,7 @@ class FruitBoxVs:
         self.font_over  = pygame.font.SysFont("Arial", 38, bold=True)
         self.font_sub   = pygame.font.SysFont("Arial", 20)
         self.font_btn   = pygame.font.SysFont("Arial", 13, bold=True)
+        self.font_viz   = pygame.font.SysFont("Arial", 11, bold=True)
 
         self.human_game = FruitBoxGame(grid_type=grid_type)
         self.ai_game    = FruitBoxGame(grid_type=grid_type)
@@ -93,6 +104,8 @@ class FruitBoxVs:
         self._game_over_card_rect = pygame.Rect(0, 0, 0, 0)
         self._restart_over_rect   = pygame.Rect(0, 0, 0, 0)
         self.stats            = fruitbox_stats.get_vs_stats()
+        self._trace_notice          = ""
+        self._trace_notice_until    = 0.0
 
         # ── pygame_gui ────────────────────────────────────────────
         self.ui = pygame_gui.UIManager((WIN_W, WIN_H), get_theme())
@@ -105,7 +118,7 @@ class FruitBoxVs:
         self._icon_eye_slash = fruitbox_colors.load_icon_fit(os.path.join(_ASSETS, "eye.slash.png"), _icon_sz, _icon_sz)
 
         # Buttons placed right-to-left from AI board right edge
-        # Visual order left→right: Menu | Pause | Restart | Hide
+        # Visual order left→right: Menu | Pause | Restart | Trace | Gen tree | Hide
         rx = _AI_BOARD_RIGHT - PADDING
 
         # Hide toggle (rightmost)
@@ -114,7 +127,21 @@ class FruitBoxVs:
             text="",
             manager=self.ui,
         )
-        rx -= 34 + 8
+        rx -= 34 + 6
+
+        self.gen_viz_btn = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect(rx - _TREE_W, _BTN_Y, _TREE_W, _BTN_H),
+            text="Gen tree",
+            manager=self.ui,
+        )
+        rx -= _TREE_W + 6
+
+        self.trace_viz_btn = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect(rx - _TRACE_W, _BTN_Y, _TRACE_W, _BTN_H),
+            text="Solve trace",
+            manager=self.ui,
+        )
+        rx -= _TRACE_W + 8
 
         # Restart
         self.restart_btn = pygame_gui.elements.UIButton(
@@ -140,6 +167,38 @@ class FruitBoxVs:
         )
 
         self.reset()
+
+    def _sync_viz_buttons(self):
+        game = self.human_game
+        viz = game.board_viz
+        computing = game.is_trace_computing()
+        if game.has_generator_viz():
+            self.gen_viz_btn.enable()
+        else:
+            self.gen_viz_btn.disable()
+            if viz.mode == VizMode.GENERATOR_TREE:
+                game.board_viz = BoardVizMeta()
+                viz = game.board_viz
+
+        if computing:
+            self.trace_viz_btn.set_text("Computing…")
+            self.trace_viz_btn.disable()
+        else:
+            self.trace_viz_btn.enable()
+            self.trace_viz_btn.set_text(
+                "Trace on" if viz.mode == VizMode.SOLVER_TRACE else "Solve trace"
+            )
+        self.gen_viz_btn.set_text(
+            "Tree on" if viz.mode == VizMode.GENERATOR_TREE else "Gen tree"
+        )
+
+    def _poll_trace_viz(self):
+        status = self.human_game.poll_solver_trace_viz()
+        if status == "failed":
+            self._trace_notice = "No solve trace found"
+            self._trace_notice_until = time.time() + 3.0
+        if status is not None:
+            self._sync_viz_buttons()
 
     def _create_model(self):
         raise NotImplementedError("subclass must implement _create_model() for model opponents")
@@ -182,14 +241,26 @@ class FruitBoxVs:
 
     # ── drawing ───────────────────────────────────────────────────
 
-    def _draw_board(self, game, board_x, drag_start=None, drag_end=None):
+    def _draw_board(self, game, board_x, drag_start=None, drag_end=None, *, show_viz=False):
         C = fruitbox_colors.C
+        viz = game.board_viz if show_viz else BoardVizMeta()
+        lookup = viz.lookup() if viz.mode != VizMode.OFF else {}
         for row in range(ROWS):
             for col in range(COLS):
                 rect    = self._cell_rect(row, col, board_x)
                 val     = game.grid[row][col]
                 cleared = val == -1
-                pygame.draw.rect(self.screen, C["CLEARED_BG"] if cleared else C["CELL_BG"], rect, border_radius=5)
+                entry   = lookup.get((row, col))
+
+                if cleared:
+                    cell_color = C["CLEARED_BG"]
+                elif entry is not None:
+                    tint = rgb_for_depth(entry.depth)
+                    cell_color = blend_rgb(C["CELL_BG"], tint, 0.42)
+                else:
+                    cell_color = C["CELL_BG"]
+
+                pygame.draw.rect(self.screen, cell_color, rect, border_radius=5)
                 pygame.draw.rect(self.screen, C["CELL_BORDER"], rect, width=1, border_radius=5)
                 if not cleared:
                     surf = self.font_num.render(str(val), True, C["TEXT_PRIMARY"])
@@ -197,6 +268,9 @@ class FruitBoxVs:
                         rect.x + (CELL - 1 - surf.get_width())  // 2,
                         rect.y + (CELL - 1 - surf.get_height()) // 2,
                     ))
+                    if entry is not None and entry.label:
+                        label_surf = self.font_viz.render(entry.label, True, C["TEXT_SECONDARY"])
+                        self.screen.blit(label_surf, (rect.x + 4, rect.y + 2))
 
         if drag_start and drag_end:
             r1 = min(drag_start[0], drag_end[0])
@@ -230,6 +304,34 @@ class FruitBoxVs:
         tx = (WIN_W - timer_surf.get_width()) // 2
         self.screen.blit(self.font_label.render("TIME", True, C["TEXT_SECONDARY"]), (tx, 12))
         self.screen.blit(timer_surf, (tx, 28))
+
+        self._draw_depth_legend()
+
+        if self._trace_notice and time.time() < self._trace_notice_until:
+            notice = self.font_label.render(self._trace_notice, True, C["TIMER_DANGER"])
+            nx = (WIN_W - notice.get_width()) // 2
+            self.screen.blit(notice, (nx, HUD_H - 14))
+
+    def _draw_depth_legend(self):
+        depths = legend_depths(self.human_game.board_viz)
+        if not depths:
+            return
+
+        C = fruitbox_colors.C
+        swatch = 10
+        num_w = self.font_viz.size("9")[0]
+        item_w = swatch + 3 + num_w
+        gap = 8
+        total_w = len(depths) * item_w + max(0, len(depths) - 1) * gap
+        x = (WIN_W - total_w) // 2
+        y = HUD_H - 15
+
+        for depth in depths:
+            rect = pygame.Rect(x, y, swatch, swatch)
+            pygame.draw.rect(self.screen, rgb_for_depth(depth), rect, border_radius=2)
+            label = self.font_viz.render(str(depth), True, C["TEXT_SECONDARY"])
+            self.screen.blit(label, (x + swatch + 3, y - 1))
+            x += item_w + gap
 
 
     def _draw_paused(self):
@@ -370,6 +472,8 @@ class FruitBoxVs:
         self._result_recorded = False
         self._game_start      = time.time()
         self._pause_alpha     = 0.0
+        self._trace_notice          = ""
+        self._trace_notice_until    = 0.0
 
         self._solver_moves = []
         self._solver_ready = self.opponent != "solver"
@@ -381,6 +485,7 @@ class FruitBoxVs:
             ).start()
 
         self.pause_btn.enable()
+        self._sync_viz_buttons()
 
     # ── main loop ─────────────────────────────────────────────────
 
@@ -401,6 +506,12 @@ class FruitBoxVs:
                         self.reset()
                     if event.ui_element == self.toggle_btn:
                         self.ai_board_visible = not self.ai_board_visible
+                    if event.ui_element == self.trace_viz_btn:
+                        self.human_game.toggle_solver_trace_viz()
+                        self._sync_viz_buttons()
+                    if event.ui_element == self.gen_viz_btn and self.human_game.has_generator_viz():
+                        self.human_game.toggle_generator_tree_viz()
+                        self._sync_viz_buttons()
                     if event.ui_element == self.pause_btn and not self.game_over:
                         self.human_game.toggle_pause()
                         self.drag_start = self.drag_end = None
@@ -491,9 +602,13 @@ class FruitBoxVs:
             else:
                 self._pause_alpha = 0.0
 
+            self._poll_trace_viz()
+
             self.screen.fill(fruitbox_colors.C["BG"])
             self._draw_hud()
-            self._draw_board(self.human_game, self._human_x(), self.drag_start, self.drag_end)
+            self._draw_board(
+                self.human_game, self._human_x(), self.drag_start, self.drag_end, show_viz=True,
+            )
             if self.human_game.paused:
                 self._draw_paused()
 
